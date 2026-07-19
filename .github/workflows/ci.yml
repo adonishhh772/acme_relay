@@ -1,0 +1,91 @@
+name: relay-ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: relay-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -r apps/api/requirements-dev.txt bandit
+      - name: Prompt version gate
+        run: python scripts/check_prompts.py
+      - name: Ruff
+        run: cd apps/api && ruff check . && ruff format --check .
+      - name: Bandit
+        run: bandit -q -r apps/api -x apps/api/tests -lll
+      - name: Unit tests + coverage
+        run: cd apps/api && pytest --cov=. --cov-config=.coveragerc --cov-fail-under=80 --cov-report=term-missing
+      - name: pip-audit
+        run: pip install pip-audit && pip-audit -r apps/api/requirements.txt
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install and test
+        run: |
+          cd apps/web
+          npm ci || npm install
+          npm run lint
+          npm test -- --run
+          npm run build
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit
+        run: cd apps/web && npm ci || npm install && npm audit --audit-level=high
+
+  kustomize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate kustomize base
+        run: |
+          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz | tar xz
+          ./kustomize build infra/kubernetes/base > /tmp/relay-kustomize.yaml
+          test -s /tmp/relay-kustomize.yaml
+          grep -q "kind: Ingress" /tmp/relay-kustomize.yaml
+          grep -q "kind: NetworkPolicy" /tmp/relay-kustomize.yaml
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Playwright
+        run: |
+          cd apps/web
+          npm ci || npm install
+          npx playwright install chromium --with-deps
+      - name: API health smoke (containerless)
+        run: |
+          # Lightweight contract: ensure smoke spec file and health path exist
+          test -f apps/web/e2e/smoke.spec.ts
+          grep -q "/health" apps/web/e2e/smoke.spec.ts

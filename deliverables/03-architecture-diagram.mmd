@@ -1,0 +1,79 @@
+flowchart TB
+  subgraph clients [Clients]
+    Web["apps/web<br/>React Command Desk"]
+    ExtMCP["External MCP Clients<br/>Cursor / Claude Desktop"]
+  end
+
+  subgraph auth [Identity]
+    KC["Keycloak<br/>JWT / TOTP / 4 roles"]
+  end
+
+  subgraph api [apps/api — FastAPI]
+    direction TB
+    Routers["HTTP Routers<br/>chat · desk · tasks · approvals · knowledge<br/>admin · account · evaluations · governance · mcp/status"]
+    Agent["LangGraph ReAct<br/>create_react_agent"]
+    Tools["Native Tools<br/>RBAC · HITL · audit"]
+    Skills["Skills ×4<br/>escalation · SLA · triage · handoff"]
+    Ground["Groundedness Verifier"]
+    MCPClient["MCP Client<br/>langchain-mcp-adapters"]
+    Routers --> Agent
+    Agent --> Tools
+    Agent --> Skills
+    Agent --> MCPClient
+    Agent --> Ground
+  end
+
+  subgraph mcp [MCP Servers — SSE]
+    DomainMCP["mcp-domain :8090"]
+    FsMCP["mcp-filesystem :8091"]
+    PgMCP["mcp-postgres :8092<br/>SELECT only"]
+  end
+
+  subgraph data [Data Stores]
+    PG[("PostgreSQL 16 + pgvector<br/>customers · cases · audit · RBAC · RAG chunks")]
+    Redis[("Redis Stack<br/>sessions · checkpoints · Celery broker")]
+    KB["infra/knowledge/*.md<br/>public · internal · restricted"]
+  end
+
+  subgraph workers [Async]
+    Celery["Celery Worker<br/>chunk + embed ingest"]
+  end
+
+  subgraph obs [Observability]
+    Langfuse["Langfuse"]
+    GlitchTip["GlitchTip"]
+    Prom["Prometheus"]
+    Grafana["Grafana"]
+  end
+
+  subgraph gitops [GitOps]
+    Argo["Argo CD"]
+    K8s["Kubernetes<br/>Ingress · NetworkPolicy · MCP Deployments"]
+  end
+
+  Web -->|"HTTPS + Bearer JWT"| Routers
+  Web -->|"OIDC login"| KC
+  Routers -->|"validate JWT"| KC
+
+  Tools --> PG
+  Tools --> Redis
+  MCPClient --> DomainMCP
+  MCPClient --> FsMCP
+  MCPClient --> PgMCP
+  ExtMCP --> mcp
+
+  DomainMCP --> PG
+  FsMCP --> KB
+  PgMCP --> PG
+  Celery --> KB
+  Celery --> PG
+  Routers --> Celery
+
+  Agent --> Langfuse
+  Routers --> Prom
+  Prom --> Grafana
+  Agent -->|"agent_runs · tool_call_audit"| PG
+  Agent -.-> GlitchTip
+
+  Git[Git] --> Argo
+  Argo --> K8s

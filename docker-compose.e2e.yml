@@ -1,0 +1,66 @@
+# Minimal smoke stack for Playwright (API health + login page).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay_secret
+      POSTGRES_DB: relay_ops
+    expose:
+      - "5432"
+    volumes:
+      - ./infra/postgres/00-databases.sh:/docker-entrypoint-initdb.d/00-databases.sh
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infra/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - ./infra/postgres/03-schema-enrichment.sql:/docker-entrypoint-initdb.d/03-schema-enrichment.sql
+      - ./infra/postgres/04-rbac-operations-parity.sql:/docker-entrypoint-initdb.d/04-rbac-operations-parity.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis/redis-stack-server:latest
+    environment:
+      REDIS_ARGS: "--requirepass redis_secret"
+    expose:
+      - "6379"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    ports:
+      - "8080:8080"
+
+  api:
+    build: ./apps/api
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/relay_ops
+      REDIS_URL: redis://:redis_secret@redis:6379/0
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8080
+      ENABLE_MCP_AGENT_TOOLS: "false"
+      ENABLE_LANGFUSE: "false"
+      AUTH_DISABLED_FOR_TESTS: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_started
+
+  web:
+    build: ./apps/web
+    ports:
+      - "5173:80"
+    depends_on:
+      - api

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "eval_01",
+    "role": "sales_user",
+    "query": "Show open customer issues for Meridian Pay, summarise the latest status, and suggest the next action.",
+    "expected_tools_any": ["get_open_issues", "run_escalation_summary_skill", "summarize_issue_history"],
+    "expect_rbac_ok": true,
+    "notes": "Primary demo flow"
+  },
+  {
+    "id": "eval_02",
+    "role": "sales_user",
+    "query": "Create a next action to call Meridian Pay finance today.",
+    "expected_tools_any": ["create_next_action"],
+    "expect_permission_denied": true,
+    "notes": "Sales must not create next actions"
+  },
+  {
+    "id": "eval_03",
+    "role": "support_user",
+    "query": "List all active issues for Cascade Retail Group.",
+    "expected_tools_any": ["get_open_issues"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_04",
+    "role": "support_user",
+    "query": "What is the latest status on CASE-2001 for Meridian Pay?",
+    "expected_tools_any": ["summarize_issue_history"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_05",
+    "role": "support_user",
+    "query": "Run customer escalation summary for Meridian Pay.",
+    "expected_tools_any": ["run_escalation_summary_skill"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_06",
+    "role": "sales_user",
+    "query": "What does the executive incident protocol say?",
+    "expected_tools_any": ["search_knowledge"],
+    "expect_rbac_ok": true,
+    "notes": "RBAC RAG — sales must not receive restricted admin doc content"
+  },
+  {
+    "id": "eval_07",
+    "role": "admin",
+    "query": "Search knowledge for executive incident protocol steps.",
+    "expected_tools_any": ["search_knowledge"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_08",
+    "role": "support_user",
+    "query": "Assess SLA breach risk for Meridian Pay.",
+    "expected_tools_any": ["run_sla_breach_assessment_skill", "get_open_issues"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_09",
+    "role": "sales_user",
+    "query": "Who is the account owner for Northline Logistics?",
+    "expected_tools_any": ["get_customer_profile_by_name"],
+    "expect_rbac_ok": true
+  },
+  {
+    "id": "eval_10",
+    "role": "support_user",
+    "query": "Create a next action for CASE-2001: schedule finance bridge call.",
+    "expected_tools_any": ["create_next_action"],
+    "expect_rbac_ok": true,
+    "notes": "Should stage HITL approval"
+  }
+]

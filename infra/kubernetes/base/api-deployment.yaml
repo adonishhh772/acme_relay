@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay-api
+  labels:
+    app: relay-api
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: relay
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: relay-api
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app: relay-api
+        app.kubernetes.io/name: api
+        app.kubernetes.io/part-of: relay
+    spec:
+      containers:
+        - name: api
+          image: relay-api:local
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: relay-app-secrets
+          env:
+            - name: ENABLE_MCP_AGENT_TOOLS
+              value: "true"
+            - name: MCP_DOMAIN_URL
+              value: http://relay-mcp-domain:8090
+            - name: MCP_FILESYSTEM_URL
+              value: http://relay-mcp-filesystem:8091
+            - name: MCP_POSTGRES_URL
+              value: http://relay-mcp-postgres:8092
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relay-api
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  selector:
+    app: relay-api
+  ports:
+    - port: 8000
+      targetPort: 8000

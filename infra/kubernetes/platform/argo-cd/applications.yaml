@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: relay-ops-local
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example/acme-relay.git
+    targetRevision: HEAD
+    path: infra/kubernetes/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: relay-ops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

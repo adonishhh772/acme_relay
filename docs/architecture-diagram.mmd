@@ -1,0 +1,17 @@
+flowchart TB
+  User[User] --> Web[Relay_CommandDesk]
+  Web --> KC[Keycloak_MFA]
+  Web --> API[FastAPI]
+  API --> Agent[LangGraph_ReAct]
+  Agent --> Tools[Native_Tools_Skills]
+  Agent --> MCP[MCP_Domain_PG_FS]
+  Tools --> PG[(Postgres_pgvector)]
+  MCP --> PG
+  API --> Redis[(Redis)]
+  API --> Celery[Celery_Worker]
+  Celery --> PG
+  API --> Langfuse[Langfuse]
+  API --> GlitchTip[GlitchTip]
+  API --> Prom[Prometheus]
+  Git[Git] --> ArgoCD[ArgoCD]
+  ArgoCD --> K8s[Kubernetes]

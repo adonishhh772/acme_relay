@@ -1,0 +1,353 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay_secret
+      POSTGRES_DB: relay_ops
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/00-databases.sh:/docker-entrypoint-initdb.d/00-databases.sh
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infra/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - ./infra/postgres/03-schema-enrichment.sql:/docker-entrypoint-initdb.d/03-schema-enrichment.sql
+      - ./infra/postgres/04-rbac-operations-parity.sql:/docker-entrypoint-initdb.d/04-rbac-operations-parity.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-relay} -d ${POSTGRES_DB:-relay_ops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis/redis-stack-server:latest
+    command: redis-stack-server --requirepass redis_secret
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  keycloak:
+    build: ./infra/keycloak
+    command: start-dev --import-realm --health-enabled=true
+    environment:
+      KC_DB: dev-file
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/127.0.0.1/9000",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  mcp-domain:
+    build: ./apps/mcp-domain
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/relay_ops
+      MCP_PORT: "8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8090:8090"
+
+  mcp-filesystem:
+    build: ./apps/mcp-filesystem
+    environment:
+      KNOWLEDGE_ROOT: /data/knowledge
+      MCP_PORT: "8091"
+    volumes:
+      - ./infra/knowledge:/data/knowledge:ro
+    ports:
+      - "8091:8091"
+
+  mcp-postgres:
+    build: ./apps/mcp-postgres
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/relay_ops
+      MCP_PORT: "8092"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8092:8092"
+
+  langfuse-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 5s
+      retries: 10
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse_clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      retries: 15
+
+  langfuse-minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret
+    volumes:
+      - langfuse_minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      retries: 10
+
+  langfuse-minio-init:
+    image: minio/mc:latest
+    depends_on:
+      langfuse-minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        export MC_CONFIG_DIR=/tmp/.mc
+        mc alias set local http://langfuse-minio:9000 minio miniosecret
+        mc mb --ignore-existing local/langfuse
+
+  langfuse-redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass langfuse_redis_secret
+    volumes:
+      - langfuse_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "langfuse_redis_secret", "ping"]
+      interval: 5s
+      retries: 10
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-minio-init:
+        condition: service_completed_successfully
+      langfuse-redis:
+        condition: service_healthy
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      SALT: relay-salt-dev-only-change-me
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:clickhouse@langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: us-east-1
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: langfuse_redis_secret
+
+  langfuse:
+    image: langfuse/langfuse:3
+    depends_on:
+      langfuse-worker:
+        condition: service_started
+    ports:
+      - "3001:3000"
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: relay-langfuse-dev-secret-min-32-chars
+      LANGFUSE_INIT_ORG_ID: relay-org
+      LANGFUSE_INIT_ORG_NAME: Acme Relay
+      LANGFUSE_INIT_PROJECT_ID: relay-ops
+      LANGFUSE_INIT_PROJECT_NAME: relay-agent
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-relay-local-public
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-relay-local-secret
+      LANGFUSE_INIT_USER_EMAIL: admin@relay.local
+      LANGFUSE_INIT_USER_PASSWORD: admin123
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/glitchtip
+      REDIS_URL: redis://:redis_secret@redis:6379/2
+      SECRET_KEY: relay-glitchtip-dev-secret-change-me
+      PORT: "8000"
+      EMAIL_URL: consolemail://
+      GLITCHTIP_DOMAIN: http://localhost:8001
+      DEFAULT_FROM_EMAIL: relay@localhost
+      CELERY_WORKER_AUTOSCALE: "1,1"
+      ENABLE_OPENUSERANALYTICS: "false"
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    depends_on:
+      - prometheus
+
+  api:
+    build: ./apps/api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/relay_ops
+      REDIS_URL: redis://:redis_secret@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis_secret@redis:6379/1
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8080
+      KEYCLOAK_REALM: acme
+      KEYCLOAK_CLIENT_ID: relay-backend
+      KEYCLOAK_FRONTEND_CLIENT_ID: relay-frontend
+      FRONTEND_URL: http://localhost:5173
+      MCP_DOMAIN_URL: http://mcp-domain:8090
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8091
+      MCP_POSTGRES_URL: http://mcp-postgres:8092
+      ENABLE_MCP_AGENT_TOOLS: ${ENABLE_MCP_AGENT_TOOLS:-true}
+      ENABLE_LANGFUSE: ${ENABLE_LANGFUSE:-true}
+      LANGFUSE_HOST: http://langfuse:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-relay-local-public}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-relay-local-secret}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      ENABLE_GLITCHTIP: ${ENABLE_GLITCHTIP:-true}
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      KNOWLEDGE_ROOT: /data/knowledge
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./infra/knowledge:/data/knowledge:ro
+      - ./evals:/app/evals
+    # Eval runner lives at /app/evals (mounted)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      mcp-domain:
+        condition: service_started
+      langfuse:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  worker:
+    build: ./apps/worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://relay:relay_secret@postgres:5432/relay_ops
+      CELERY_BROKER_URL: redis://:redis_secret@redis:6379/1
+      REDIS_URL: redis://:redis_secret@redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+      KNOWLEDGE_ROOT: /data/knowledge
+    volumes:
+      - ./infra/knowledge:/data/knowledge:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_URL: ""
+        VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: acme
+        VITE_KEYCLOAK_CLIENT_ID: relay-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  langfuse_db:
+  langfuse_clickhouse:
+  langfuse_minio:
+  langfuse_redis:
+  prometheus_data:
+  grafana_data:

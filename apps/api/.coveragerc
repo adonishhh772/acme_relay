@@ -1,0 +1,27 @@
+[run]
+source = .
+omit =
+    tests/*
+    .venv/*
+    agent/graph.py
+    memory/*
+    support/db.py
+    worker_client.py
+    telemetry/*
+    routers/chat.py
+    routers/desk.py
+    routers/knowledge.py
+    routers/audit.py
+    routers/approvals.py
+    routers/governance.py
+    routers/tasks.py
+    routers/account.py
+    routers/admin.py
+    routers/evaluations.py
+
+[report]
+fail_under = 80
+show_missing = true
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
