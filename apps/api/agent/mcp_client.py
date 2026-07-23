@@ -74,6 +74,37 @@ def _should_skip_mcp_tool(name: str) -> bool:
     return lower.endswith("_ping") or lower.split("_")[-1] == "ping"
 
 
+def prefix_mcp_tool_name(server_name: str, tool_name: str) -> str:
+    """Namespace MCP tools as ``{server}_{tool}`` for RBAC prefix matching.
+
+    Newer ``langchain-mcp-adapters`` builds no longer accept
+    ``tool_name_prefix=True`` on ``MultiServerMCPClient``, so we prefix
+    explicitly after loading tools per server.
+    """
+    if tool_name.startswith(f"{server_name}_"):
+        return tool_name
+    return f"{server_name}_{tool_name}"
+
+
+def _rename_mcp_tool(server_name: str, tool: BaseTool) -> StructuredTool:
+    prefixed_name = prefix_mcp_tool_name(server_name, tool.name)
+
+    async def _invoke(
+        *args: Any,
+        _base: BaseTool = tool,
+        **kwargs: Any,
+    ) -> Any:
+        payload = kwargs if kwargs else (args[0] if args else {})
+        return await _base.ainvoke(payload)
+
+    return StructuredTool.from_function(
+        coroutine=_invoke,
+        name=prefixed_name,
+        description=tool.description or f"MCP tool from {server_name}",
+        args_schema=tool.args_schema,
+    )
+
+
 def is_mcp_research_tool(name: str) -> bool:
     return any(name.startswith(prefix) for prefix in MCP_RESEARCH_TOOL_PREFIXES)
 
@@ -115,14 +146,19 @@ async def get_mcp_base_tools(*, force_reload: bool = False) -> list[BaseTool]:
         return _cached_tools
 
     connections = build_mcp_connections()
-    _client = MultiServerMCPClient(connections, tool_name_prefix=True)
+    _client = MultiServerMCPClient(connections)
 
     last_exc: Exception | None = None
     for attempt in range(3):
         try:
-            tools = await _client.get_tools()
-            filtered = [tool for tool in tools if not _should_skip_mcp_tool(tool.name)]
-            _cached_tools = filtered
+            prefixed_tools: list[BaseTool] = []
+            for server_name in MCP_SERVER_KEYS:
+                server_tools = await _client.get_tools(server_name=server_name)
+                for tool in server_tools:
+                    if _should_skip_mcp_tool(tool.name):
+                        continue
+                    prefixed_tools.append(_rename_mcp_tool(server_name, tool))
+            _cached_tools = prefixed_tools
             _load_error = None
             logger.info(
                 "MCP tools loaded count=%s servers=%s",

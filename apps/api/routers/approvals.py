@@ -1,15 +1,19 @@
+"""HITL approvals inbox — durable Postgres queue (not in-memory)."""
+
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth.dependencies import CurrentUser, require_permission
-from support.db import acquire
+from services.approvals_store import (
+    count_pending_approvals,
+    decide_approval,
+    list_pending_approvals,
+    persist_staged_approvals,
+)
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
-
-# In-memory pending approvals for demo (also mirrored when tools stage them via chat response).
-_PENDING: dict[str, dict[str, Any]] = {}
 
 
 class ApprovalDecision(BaseModel):
@@ -30,10 +34,15 @@ async def stage_approval(
     user: Annotated[CurrentUser, Depends(require_permission("create_next_action"))],
 ) -> dict[str, Any]:
     approval = dict(body.approval)
-    approval_id = str(approval.get("approval_id"))
-    approval["staged_by"] = user.username
-    _PENDING[approval_id] = approval
-    return {"ok": True, "approval_id": approval_id}
+    approval.setdefault("requested_by", user.username)
+    approval.setdefault("tool", approval.get("tool") or "create_next_action")
+    ids = await persist_staged_approvals(
+        request_id=str(approval.get("request_id") or f"stage-{user.sub}"),
+        session_id=str(approval.get("session_id") or "manual-stage"),
+        created_by_sub=user.sub,
+        pending=[approval],
+    )
+    return {"ok": True, "approval_id": ids[0] if ids else approval.get("approval_id")}
 
 
 @router.get("")
@@ -41,7 +50,16 @@ async def list_approvals(
     user: Annotated[CurrentUser, Depends(require_permission("create_next_action"))],
 ) -> dict[str, Any]:
     _ = user
-    return {"items": list(_PENDING.values())}
+    items = await list_pending_approvals()
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/count")
+async def approvals_count(
+    user: Annotated[CurrentUser, Depends(require_permission("create_next_action"))],
+) -> dict[str, Any]:
+    _ = user
+    return {"pending": await count_pending_approvals()}
 
 
 @router.post("/decide")
@@ -49,38 +67,17 @@ async def decide(
     body: ApprovalDecision,
     user: Annotated[CurrentUser, Depends(require_permission("approve_next_action"))],
 ) -> dict[str, Any]:
-    pending = _PENDING.pop(body.approval_id, None)
-    if pending is None and body.issue_key and body.action_text:
-        pending = {
-            "issue_key": body.issue_key,
-            "action_text": body.action_text,
-            "owner": body.owner or user.username,
-        }
-    if pending is None:
-        raise HTTPException(status_code=404, detail="Approval not found")
-    if not body.approve:
-        return {"ok": True, "status": "rejected", "approval_id": body.approval_id}
-    issue_key = str(pending.get("issue_key") or body.issue_key or "")
-    action_text = str(pending.get("action_text") or body.action_text or "")
-    owner = str(pending.get("owner") or body.owner or user.username)
-    async with acquire() as connection:
-        async with connection.transaction():
-            issue_id = await connection.fetchval(
-                "SELECT id FROM issues WHERE issue_key = $1",
-                issue_key.upper(),
-            )
-            if issue_id is None:
-                raise HTTPException(status_code=404, detail="Issue not found")
-            row = await connection.fetchrow(
-                """
-                INSERT INTO next_actions (issue_id, action_text, owner, status, created_by_sub, approved_by_sub)
-                VALUES ($1, $2, $3, 'approved', $4, $5)
-                RETURNING id::text, status::text, action_text, owner
-                """,
-                issue_id,
-                action_text,
-                owner,
-                pending.get("requested_by"),
-                user.sub,
-            )
-    return {"ok": True, "status": "approved", "next_action": dict(row)}
+    result = await decide_approval(
+        approval_id=body.approval_id,
+        approve=body.approve,
+        decided_by_sub=user.sub,
+        decided_by_username=user.username,
+        action_text=body.action_text,
+        issue_key=body.issue_key,
+        owner=body.owner,
+    )
+    if not result.get("ok"):
+        detail = str(result.get("error") or "Approval not found")
+        status = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=status, detail=detail)
+    return result

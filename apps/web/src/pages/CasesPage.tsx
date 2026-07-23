@@ -1,5 +1,7 @@
+import { Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { PageHeader } from "../components/layout/PageHeader";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -23,9 +25,13 @@ export function CasesPage() {
   }, [token]);
 
   return (
-    <div data-testid="issues-page">
-      <h1>Issues</h1>
-      <div className="panel">
+    <div data-testid="issues-page" className="p-6 lg:p-8">
+      <PageHeader
+        icon={Ticket}
+        title="Issues"
+        description="Open and recent support cases across the account portfolio."
+      />
+      <div className="card overflow-hidden">
         <table className="table">
           <thead>
             <tr>

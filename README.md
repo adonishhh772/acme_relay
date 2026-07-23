@@ -2,7 +2,7 @@
 
 **Relay** is an agentic enterprise assistant for the fictional client **Acme Operations**. Staff ask operational questions; a LangGraph ReAct agent selects tools dynamically against PostgreSQL, Redis session memory, **MCP servers (wired into the agent)**, and **RBAC-aware RAG** (pgvector), with post-answer **groundedness** checks.
 
-This tree is an original implementation (product **Relay** / **Command Desk**). It follows the same *architectural patterns* as the sibling inspiration project under the parent folder, but uses a distinct UI, seed data (Meridian / Cascade / Northline), and codebase — not a reskin.
+This tree is an original implementation (product **Relay** / **Command Desk**). It follows the same *architectural patterns* as the sibling inspiration project under the parent folder, but uses a distinct UI, seed data (VaultLedger / Nexus Freight / Aurora Bank), and codebase — not a reskin.
 
 > Located at `acme-relay/` inside the workspace. Prefer promoting this directory to its own git remote for submission.
 
@@ -16,16 +16,25 @@ make demo              # docker compose up --build -d
 make migrate-db        # if upgrading an existing Postgres volume
 ```
 
-| Service | URL |
-|---------|-----|
-| Command Desk | http://localhost:5173 |
-| API docs | http://localhost:8000/docs |
-| MCP status | http://localhost:8000/api/mcp/status (auth) |
-| Keycloak | http://localhost:8080 |
-| Langfuse | http://localhost:3001 |
-| GlitchTip | http://localhost:8001 |
-| Grafana | http://localhost:3002 (admin / admin) |
-| Prometheus | http://localhost:9090 |
+| Service | URL (HTTP) | URL (HTTPS — `make tls-up`) |
+|---------|------------|-------------------------------|
+| Command Desk | http://localhost:5173 | https://acme-relay.local |
+| API docs | http://localhost:8000/docs | https://api.acme-relay.local/docs |
+| MCP status | http://localhost:8000/api/mcp/status (auth) | https://api.acme-relay.local/api/mcp/status |
+| Keycloak | http://localhost:8080 | https://auth.acme-relay.local |
+| Langfuse | http://localhost:3001 | https://langfuse.local |
+| GlitchTip | http://localhost:8001 | https://glitchtip.local |
+| Grafana | http://localhost:3002 (admin / admin) | https://grafana.local |
+
+### Local HTTPS (mkcert + Caddy)
+
+```bash
+brew install mkcert nss   # once
+make tls-certs            # trust local CA + write certs + /etc/hosts
+make tls-up               # stack behind https://*.local
+```
+
+See [docs/local-https.md](docs/local-https.md). Plain `make demo` still uses localhost HTTP.
 
 ### Demo users
 
@@ -40,9 +49,16 @@ Enable TOTP in Keycloak account console to demonstrate MFA.
 
 ### Seed accounts (cases)
 
-- **Meridian Pay** (`MERIDIAN`) — CASE-2001 critical settlement
-- **Cascade Retail Group** (`CASCADE`) — CASE-2002 webhooks
-- **Northline Logistics** (`NORTHLINE`) — CASE-2003 POD delay
+- **VaultLedger Payments** (`VAULTLEDGER`) — OPS-3101 critical settlement · £680k · renewal 2026-09-30
+- **Aurora Bank** (`AURORABANK`) — OPS-3102 payment webhooks · £185k · renewal 2026-08-20
+- **Nexus Freight** (`NEXUSFREIGHT`) — OPS-3103 POD delay · £420k · renewal 2026-11-15
+
+### Account management (Command Desk)
+
+- Customer commercial fields: contract value, renewal date, account/support managers
+- Account risk scores + Account 360 drawer on `/customers`
+- Dashboard AM KPIs, renewal panel, bar charts + 30-day line trends (`metric_snapshots`)
+- Assistant profile tool returns AM fields for VaultLedger / Nexus / Aurora
 
 ## Architecture
 
@@ -94,7 +110,16 @@ Three MCP servers run in Compose/K8s. The chat agent loads their tools when `ENA
 
 ## Knowledge ingest + RBAC RAG
 
+Rich demo corpus under `infra/knowledge/` (mounted at `/data/knowledge`):
+
+| Tier | Docs | Roles |
+|------|------|-------|
+| **Public** | Command Desk business value; tier/SLA/commercial guide | all staff |
+| **Internal** | Escalation; VaultLedger / Aurora / Nexus runbooks; HITL approvals | support, operations, admin |
+| **Restricted** | Executive incident protocol; commercial renewal war-room | admin only |
+
 ```bash
+make migrate-db   # refresh knowledge_documents catalog (07-knowledge-business-value.sql)
 # After login as bob/admin in UI: Knowledge → Run ingest
 # Or enqueue via API POST /api/knowledge/ingest
 ```
@@ -108,7 +133,7 @@ Chunks store `allowed_roles` + `sensitivity`. `search_knowledge` filters by the 
 | **Langfuse** http://localhost:3001 | Full agent run: LLM generations, tool spans, prompt name/version, session/user, request I/O |
 | **Postgres audit** | Durable `tool_call_audit` (`source` native/mcp) + `agent_runs` (incl. groundedness) |
 | **GlitchTip** | Exceptions / error tracking |
-| **Grafana / Prometheus** | API metrics |
+| **Grafana** | API metrics dashboards |
 
 ## Evaluation (live)
 

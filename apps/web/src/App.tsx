@@ -28,7 +28,14 @@ export function App() {
   const { ready, authenticated } = useAuth();
 
   if (!ready) {
-    return <div className="login-screen">Starting Relay…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-relay-mesh">
+        <div className="card px-8 py-6 text-center shadow-soft">
+          <p className="font-display text-lg font-semibold text-ink-primary">Relay</p>
+          <p className="mt-1 text-sm text-ink-secondary">Starting Command Desk…</p>
+        </div>
+      </div>
+    );
   }
 
   if (!authenticated) {

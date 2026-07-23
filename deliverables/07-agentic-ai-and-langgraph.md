@@ -158,7 +158,7 @@ Roles: `sales_user`, `support_user`, `operations_user`, `admin`.
 ```python
 verification = verify_groundedness(answer, tool_calls_log)
 # Safe phrases (permission denied, approval, greetings) → pass
-# Factual CASE-* / MERIDIAN|CASCADE|NORTHLINE without tools → fail
+# Factual OPS-* / VAULTLEDGER|NEXUSFREIGHT|AURORABANK without tools → fail
 # Case/account tokens must appear in tool corpus → else fail
 ```
 

@@ -17,7 +17,7 @@ async def test_sales_create_next_action_denied() -> None:
         roles={Role.SALES},
         session_id="s1",
     )
-    result = await create_next_action(ctx, "CASE-2001", "Call customer")
+    result = await create_next_action(ctx, "OPS-3101", "Call customer")
     assert result["error"] == "permission_denied"
 
 
@@ -29,7 +29,7 @@ async def test_support_create_next_action_stages_hitl() -> None:
         roles={Role.SUPPORT},
         session_id="s1",
     )
-    result = await create_next_action(ctx, "CASE-2001", "Call customer", owner="bob")
+    result = await create_next_action(ctx, "OPS-3101", "Call customer", owner="bob")
     assert result["ok"] is True
     assert result["pending_approval"] is True
     assert len(ctx.pending_approvals) == 1

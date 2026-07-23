@@ -12,5 +12,5 @@ def test_score_risk_critical() -> None:
 @pytest.mark.asyncio
 async def test_skill_denied_for_empty_roles(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = ToolContext(user_sub="x", username="x", roles=set(), session_id="s")
-    result = await invoke_skill(ctx, "run_escalation_summary_skill", "Meridian")
+    result = await invoke_skill(ctx, "run_escalation_summary_skill", "VaultLedger")
     assert result["error"] == "permission_denied"

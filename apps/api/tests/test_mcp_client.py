@@ -12,6 +12,7 @@ from agent.mcp_client import (
     is_mcp_research_tool,
     is_mcp_skill_tool,
     mcp_load_status,
+    prefix_mcp_tool_name,
     reset_mcp_cache_for_tests,
     serialize_mcp_result,
     wrap_mcp_tools_for_context,
@@ -47,7 +48,19 @@ def test_is_mcp_enabled_respects_flag(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_should_skip_ping_tools() -> None:
     assert _should_skip_mcp_tool("domain_relay_ping") is True
+    assert _should_skip_mcp_tool("relay_ping") is True
     assert _should_skip_mcp_tool("filesystem_fs_read_file") is False
+
+
+def test_prefix_mcp_tool_name() -> None:
+    assert prefix_mcp_tool_name("domain", "relay_list_open_issues") == (
+        "domain_relay_list_open_issues"
+    )
+    assert prefix_mcp_tool_name("domain", "domain_relay_list_open_issues") == (
+        "domain_relay_list_open_issues"
+    )
+    # Tool already namespaced with server id — do not double-prefix.
+    assert prefix_mcp_tool_name("postgres", "postgres_query") == "postgres_query"
 
 
 def test_mcp_tool_prefix_classifiers() -> None:
@@ -95,6 +108,6 @@ async def test_wrap_mcp_tools_for_context_invokes_run_mcp() -> None:
     ctx = FakeCtx()
     wrapped = wrap_mcp_tools_for_context([FakeTool()], ctx)
     assert len(wrapped) == 1
-    result = await wrapped[0].ainvoke({"customer_name": "Meridian"})
+    result = await wrapped[0].ainvoke({"customer_name": "VaultLedger"})
     assert result == '{"ok": true}'
     assert ctx.calls[0][0] == "domain_relay_list_open_issues"

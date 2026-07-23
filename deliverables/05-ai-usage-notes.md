@@ -13,7 +13,7 @@ A brief account of how AI-assisted development tools were used while building **
 | **Langfuse** | Trace and debug agent behaviour during development |
 | **Inline completion** | Boilerplate and repetitive patterns inside Cursor |
 
-No customer data or production secrets were sent to AI tools. Local development uses seeded demo data only (Meridian / Cascade / Northline).
+No customer data or production secrets were sent to AI tools. Local development uses seeded demo data only (VaultLedger / Nexus Freight / Aurora Bank).
 
 ---
 

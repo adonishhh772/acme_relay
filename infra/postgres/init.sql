@@ -15,10 +15,16 @@ CREATE TABLE customers (
     industry VARCHAR(128),
     tier VARCHAR(32) NOT NULL DEFAULT 'standard',
     account_owner VARCHAR(255),
+    support_manager VARCHAR(255),
+    account_manager VARCHAR(128),
     region VARCHAR(64),
+    contract_value_gbp NUMERIC(14, 2),
+    renewal_date DATE,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT customers_contract_value_non_negative
+        CHECK (contract_value_gbp IS NULL OR contract_value_gbp >= 0)
 );
 
 CREATE TABLE users (

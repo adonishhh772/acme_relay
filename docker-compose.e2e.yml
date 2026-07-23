@@ -14,6 +14,8 @@ services:
       - ./infra/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
       - ./infra/postgres/03-schema-enrichment.sql:/docker-entrypoint-initdb.d/03-schema-enrichment.sql
       - ./infra/postgres/04-rbac-operations-parity.sql:/docker-entrypoint-initdb.d/04-rbac-operations-parity.sql
+      - ./infra/postgres/05-account-management.sql:/docker-entrypoint-initdb.d/05-account-management.sql
+      - ./infra/postgres/06-am-metrics-seed.sql:/docker-entrypoint-initdb.d/06-am-metrics-seed.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

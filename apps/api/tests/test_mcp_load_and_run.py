@@ -59,13 +59,22 @@ async def test_get_mcp_base_tools_success(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(settings, "enable_mcp_agent_tools", True)
     monkeypatch.setattr(settings, "mcp_domain_url", "http://mcp-domain:8090")
 
-    fake_tool = MagicMock()
-    fake_tool.name = "domain_relay_list_open_issues"
-    ping_tool = MagicMock()
-    ping_tool.name = "domain_relay_ping"
+    async def fake_get_tools(*, server_name: str | None = None):
+        if server_name == "domain":
+            list_tool = MagicMock()
+            list_tool.name = "relay_list_open_issues"
+            list_tool.description = "list issues"
+            list_tool.args_schema = None
+            list_tool.ainvoke = AsyncMock(return_value={"ok": True})
+            ping_tool = MagicMock()
+            ping_tool.name = "relay_ping"
+            ping_tool.description = "ping"
+            ping_tool.args_schema = None
+            return [list_tool, ping_tool]
+        return []
 
     client = MagicMock()
-    client.get_tools = AsyncMock(return_value=[fake_tool, ping_tool])
+    client.get_tools = AsyncMock(side_effect=fake_get_tools)
 
     with patch.dict(
         "sys.modules",
@@ -83,6 +92,7 @@ async def test_get_mcp_base_tools_success(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert len(tools) == 1
     assert tools[0].name == "domain_relay_list_open_issues"
+    assert client.get_tools.await_count == 3
 
 
 @pytest.mark.asyncio

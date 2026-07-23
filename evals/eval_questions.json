@@ -2,7 +2,7 @@
   {
     "id": "eval_01",
     "role": "sales_user",
-    "query": "Show open customer issues for Meridian Pay, summarise the latest status, and suggest the next action.",
+    "query": "Show open customer issues for VaultLedger Payments, summarise the latest status, and suggest the next action.",
     "expected_tools_any": ["get_open_issues", "run_escalation_summary_skill", "summarize_issue_history"],
     "expect_rbac_ok": true,
     "notes": "Primary demo flow"
@@ -10,7 +10,7 @@
   {
     "id": "eval_02",
     "role": "sales_user",
-    "query": "Create a next action to call Meridian Pay finance today.",
+    "query": "Create a next action to call VaultLedger Payments finance today.",
     "expected_tools_any": ["create_next_action"],
     "expect_permission_denied": true,
     "notes": "Sales must not create next actions"
@@ -18,21 +18,21 @@
   {
     "id": "eval_03",
     "role": "support_user",
-    "query": "List all active issues for Cascade Retail Group.",
+    "query": "List all active issues for Nexus Freight.",
     "expected_tools_any": ["get_open_issues"],
     "expect_rbac_ok": true
   },
   {
     "id": "eval_04",
     "role": "support_user",
-    "query": "What is the latest status on CASE-2001 for Meridian Pay?",
+    "query": "What is the latest status on OPS-3101 for VaultLedger Payments?",
     "expected_tools_any": ["summarize_issue_history"],
     "expect_rbac_ok": true
   },
   {
     "id": "eval_05",
     "role": "support_user",
-    "query": "Run customer escalation summary for Meridian Pay.",
+    "query": "Run customer escalation summary for VaultLedger Payments.",
     "expected_tools_any": ["run_escalation_summary_skill"],
     "expect_rbac_ok": true
   },
@@ -54,21 +54,21 @@
   {
     "id": "eval_08",
     "role": "support_user",
-    "query": "Assess SLA breach risk for Meridian Pay.",
+    "query": "Assess SLA breach risk for VaultLedger Payments.",
     "expected_tools_any": ["run_sla_breach_assessment_skill", "get_open_issues"],
     "expect_rbac_ok": true
   },
   {
     "id": "eval_09",
     "role": "sales_user",
-    "query": "Who is the account owner for Northline Logistics?",
+    "query": "Who is the account owner for Aurora Bank?",
     "expected_tools_any": ["get_customer_profile_by_name"],
     "expect_rbac_ok": true
   },
   {
     "id": "eval_10",
     "role": "support_user",
-    "query": "Create a next action for CASE-2001: schedule finance bridge call.",
+    "query": "Create a next action for OPS-3101: schedule finance bridge call.",
     "expected_tools_any": ["create_next_action"],
     "expect_rbac_ok": true,
     "notes": "Should stage HITL approval"

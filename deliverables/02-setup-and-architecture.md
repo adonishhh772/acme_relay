@@ -73,7 +73,7 @@ make deliverables-zip   # source zip for this pack
 | `dana` | `dana123` | `operations_user` (mutate + audit) |
 | `admin` | `admin123` | `admin` |
 
-Seed accounts: **Meridian Pay** (`MERIDIAN` / CASE-2001), **Cascade Retail Group** (`CASCADE` / CASE-2002), **Northline Logistics** (`NORTHLINE` / CASE-2003).
+Seed accounts: **VaultLedger Payments** (`VAULTLEDGER` / OPS-3101), **Nexus Freight** (`NEXUSFREIGHT` / OPS-3102), **Aurora Bank** (`AURORABANK` / OPS-3103).
 
 ---
 

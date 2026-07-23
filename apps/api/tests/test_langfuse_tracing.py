@@ -24,7 +24,7 @@ def test_log_tool_span_noop_without_client(monkeypatch) -> None:
     tracing.log_tool_span(
         request_id="r1",
         tool_name="get_open_issues",
-        arguments={"customer_name": "Meridian"},
+        arguments={"customer_name": "VaultLedger"},
         result={"ok": True},
         latency_ms=12,
         user_sub="bob",

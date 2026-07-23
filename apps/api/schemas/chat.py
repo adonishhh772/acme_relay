@@ -24,6 +24,7 @@ class ChatResponse(BaseModel):
     prompt_name: str
     prompt_version: int
     latency_ms: int
+    grounded: bool | None = None
     groundedness: GroundednessPayload | None = None
 
 

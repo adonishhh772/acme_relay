@@ -179,11 +179,11 @@ SET display_name = EXCLUDED.display_name,
     organization_id = EXCLUDED.organization_id;
 
 INSERT INTO user_tasks (keycloak_sub, organization_id, title, description, priority, issue_key, customer_external_id)
-SELECT 'dana-ops', o.id, 'Review Meridian settlement SLA', 'Confirm CASE-2001 mitigation plan', 'high', 'CASE-2001', 'MERIDIAN'
+SELECT 'dana-ops', o.id, 'Review VaultLedger settlement SLA', 'Confirm OPS-3101 mitigation plan', 'high', 'OPS-3101', 'VAULTLEDGER'
 FROM organizations o
 WHERE o.slug = 'acme-ops'
   AND NOT EXISTS (
-    SELECT 1 FROM user_tasks t WHERE t.title = 'Review Meridian settlement SLA'
+    SELECT 1 FROM user_tasks t WHERE t.title = 'Review VaultLedger settlement SLA'
   );
 
 INSERT INTO schema_migrations (version, description)

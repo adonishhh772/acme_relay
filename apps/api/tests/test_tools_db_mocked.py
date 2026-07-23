@@ -56,17 +56,17 @@ async def test_get_customer_profile(
     monkeypatch: pytest.MonkeyPatch, support_ctx: ToolContext
 ) -> None:
     row = {
-        "external_id": "MERIDIAN",
-        "name": "Meridian Pay",
+        "external_id": "VAULTLEDGER",
+        "name": "VaultLedger Payments",
         "industry": "Fintech",
         "tier": "strategic",
         "account_owner": "Priya",
         "region": "EMEA",
     }
     monkeypatch.setattr(tools, "acquire", lambda: FakeAcquire(FakeConn(fetchrow=row)))
-    result = await get_customer_profile_by_name(support_ctx, "Meridian")
+    result = await get_customer_profile_by_name(support_ctx, "VaultLedger")
     assert result["ok"] is True
-    assert result["customer"]["external_id"] == "MERIDIAN"
+    assert result["customer"]["external_id"] == "VAULTLEDGER"
 
 
 @pytest.mark.asyncio
@@ -75,18 +75,18 @@ async def test_get_open_issues(
 ) -> None:
     rows = [
         {
-            "issue_key": "CASE-2001",
+            "issue_key": "OPS-3101",
             "title": "x",
             "status": "open",
             "priority": "critical",
             "assigned_to": "bob",
             "sla_due_at": datetime.now(timezone.utc),
-            "customer_name": "Meridian Pay",
-            "external_id": "MERIDIAN",
+            "customer_name": "VaultLedger Payments",
+            "external_id": "VAULTLEDGER",
         }
     ]
     monkeypatch.setattr(tools, "acquire", lambda: FakeAcquire(FakeConn(fetch=rows)))
-    result = await get_open_issues(support_ctx, "Meridian")
+    result = await get_open_issues(support_ctx, "VaultLedger")
     assert result["count"] == 1
 
 
@@ -96,12 +96,12 @@ async def test_summarize_filters_internal_for_sales(
 ) -> None:
     ctx = ToolContext(user_sub="a", username="a", roles={Role.SALES}, session_id="s")
     issue = {
-        "issue_key": "CASE-2001",
+        "issue_key": "OPS-3101",
         "title": "t",
         "status": "open",
         "priority": "high",
         "description": "d",
-        "customer_name": "Meridian Pay",
+        "customer_name": "VaultLedger Payments",
     }
     updates = [
         {
@@ -119,7 +119,7 @@ async def test_summarize_filters_internal_for_sales(
     ]
     conn = FakeConn(fetchrow=issue, fetch=updates)
     monkeypatch.setattr(tools, "acquire", lambda: FakeAcquire(conn))
-    result = await summarize_issue_history(ctx, "CASE-2001")
+    result = await summarize_issue_history(ctx, "OPS-3101")
     assert result["ok"] is True
     assert len(result["updates"]) == 1
 
@@ -127,7 +127,7 @@ async def test_summarize_filters_internal_for_sales(
 @pytest.mark.asyncio
 async def test_update_issue_hitl(support_ctx: ToolContext) -> None:
     result = await update_issue(
-        support_ctx, "CASE-2001", status="in_progress", comment="working"
+        support_ctx, "OPS-3101", status="in_progress", comment="working"
     )
     assert result["pending_approval"] is True
 
@@ -140,8 +140,8 @@ async def test_escalation_skill(
         return {
             "ok": True,
             "customer": {
-                "name": "Meridian Pay",
-                "external_id": "MERIDIAN",
+                "name": "VaultLedger Payments",
+                "external_id": "VAULTLEDGER",
                 "account_owner": "Priya",
             },
         }
@@ -150,7 +150,7 @@ async def test_escalation_skill(
         return {
             "ok": True,
             "open_issues": [
-                {"issue_key": "CASE-2001", "priority": "critical", "assigned_to": "bob"}
+                {"issue_key": "OPS-3101", "priority": "critical", "assigned_to": "bob"}
             ],
         }
 
@@ -160,7 +160,7 @@ async def test_escalation_skill(
     monkeypatch.setattr(escalation, "get_customer_profile_by_name", fake_profile)
     monkeypatch.setattr(escalation, "get_open_issues", fake_open)
     monkeypatch.setattr(escalation, "summarize_issue_history", fake_hist)
-    result = await invoke_skill(support_ctx, "run_escalation_summary_skill", "Meridian")
+    result = await invoke_skill(support_ctx, "run_escalation_summary_skill", "VaultLedger")
     assert result["ok"] is True
     assert result["risk_level"] == "Critical"
 
@@ -174,7 +174,7 @@ async def test_sla_skill(
             "ok": True,
             "open_issues": [
                 {
-                    "issue_key": "CASE-2001",
+                    "issue_key": "OPS-3101",
                     "priority": "critical",
                     "sla_due_at": datetime.now(timezone.utc),
                 }
@@ -183,7 +183,7 @@ async def test_sla_skill(
 
     monkeypatch.setattr(sla, "get_open_issues", fake_open)
     result = await invoke_skill(
-        support_ctx, "run_sla_breach_assessment_skill", "Meridian"
+        support_ctx, "run_sla_breach_assessment_skill", "VaultLedger"
     )
     assert result["ok"] is True
 
@@ -197,7 +197,7 @@ async def test_triage_and_handoff(
             "ok": True,
             "open_issues": [
                 {
-                    "issue_key": "CASE-2001",
+                    "issue_key": "OPS-3101",
                     "title": "t",
                     "priority": "high",
                     "assigned_to": "bob",
@@ -212,10 +212,10 @@ async def test_triage_and_handoff(
     monkeypatch.setattr(handoff, "get_open_issues", fake_open)
     monkeypatch.setattr(handoff, "summarize_issue_history", fake_hist)
     triage_result = await invoke_skill(
-        support_ctx, "run_issue_triage_skill", "Meridian"
+        support_ctx, "run_issue_triage_skill", "VaultLedger"
     )
     handoff_result = await invoke_skill(
-        support_ctx, "run_shift_handoff_skill", "Meridian"
+        support_ctx, "run_shift_handoff_skill", "VaultLedger"
     )
     assert triage_result["ok"] is True
     assert handoff_result["ok"] is True

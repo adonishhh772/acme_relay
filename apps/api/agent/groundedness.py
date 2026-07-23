@@ -16,8 +16,8 @@ class GroundednessResult(BaseModel):
     explanation: str
 
 
-_CASE_RE = re.compile(r"\bCASE[-\s]?\d+\b", re.I)
-_ACCOUNT_RE = re.compile(r"\b(MERIDIAN|CASCADE|NORTHLINE)\b", re.I)
+_CASE_RE = re.compile(r"\b(?:CASE|OPS)[-\s]?\d+\b", re.I)
+_ACCOUNT_RE = re.compile(r"\b(VAULTLEDGER|NEXUSFREIGHT|AURORABANK)\b", re.I)
 _STATUS_WORDS = (
     "open",
     "in_progress",

@@ -14,6 +14,8 @@ services:
       - ./infra/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
       - ./infra/postgres/03-schema-enrichment.sql:/docker-entrypoint-initdb.d/03-schema-enrichment.sql
       - ./infra/postgres/04-rbac-operations-parity.sql:/docker-entrypoint-initdb.d/04-rbac-operations-parity.sql
+      - ./infra/postgres/05-account-management.sql:/docker-entrypoint-initdb.d/05-account-management.sql
+      - ./infra/postgres/06-am-metrics-seed.sql:/docker-entrypoint-initdb.d/06-am-metrics-seed.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-relay} -d ${POSTGRES_DB:-relay_ops}"]
       interval: 5s
@@ -265,6 +267,8 @@ services:
       KEYCLOAK_REALM: acme
       KEYCLOAK_CLIENT_ID: relay-backend
       KEYCLOAK_FRONTEND_CLIENT_ID: relay-frontend
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       FRONTEND_URL: http://localhost:5173
       MCP_DOMAIN_URL: http://mcp-domain:8090
       MCP_FILESYSTEM_URL: http://mcp-filesystem:8091
@@ -272,14 +276,23 @@ services:
       ENABLE_MCP_AGENT_TOOLS: ${ENABLE_MCP_AGENT_TOOLS:-true}
       ENABLE_LANGFUSE: ${ENABLE_LANGFUSE:-true}
       LANGFUSE_HOST: http://langfuse:3000
+      LANGFUSE_UI_URL: ${LANGFUSE_UI_URL:-http://localhost:3001}
+      LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID:-relay-ops}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-relay-local-public}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-relay-local-secret}
+      ENABLE_LANGSMITH: ${ENABLE_LANGSMITH:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-relay-agent}
+      LANGSMITH_ORG_ID: ${LANGSMITH_ORG_ID:-}
+      LANGSMITH_UI_URL: ${LANGSMITH_UI_URL:-https://smith.langchain.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
       GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      GLITCHTIP_UI_URL: ${GLITCHTIP_UI_URL:-http://localhost:8001}
       ENABLE_GLITCHTIP: ${ENABLE_GLITCHTIP:-true}
+      GRAFANA_UI_URL: ${GRAFANA_UI_URL:-http://localhost:3002}
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       KNOWLEDGE_ROOT: /data/knowledge
     ports:

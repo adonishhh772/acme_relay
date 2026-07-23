@@ -1,0 +1,70 @@
+# Overlay: terminate TLS at Caddy with mkcert hostnames.
+# Usage: make tls-up
+#   (= docker compose -f docker-compose.yml -f docker-compose.tls.yml up --build -d)
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/.certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      glitchtip:
+        condition: service_started
+      langfuse:
+        condition: service_started
+      grafana:
+        condition: service_started
+    restart: unless-stopped
+
+  keycloak:
+    environment:
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: auth.acme-relay.local
+      KC_HOSTNAME_URL: https://auth.acme-relay.local
+      KC_HOSTNAME_ADMIN_URL: https://auth.acme-relay.local
+
+  langfuse:
+    environment:
+      NEXTAUTH_URL: https://langfuse.local
+
+  glitchtip:
+    environment:
+      GLITCHTIP_DOMAIN: https://glitchtip.local
+      DEFAULT_FROM_EMAIL: relay@acme-relay.local
+
+  api:
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: https://auth.acme-relay.local
+      FRONTEND_URL: https://acme-relay.local
+      CORS_ORIGINS: https://acme-relay.local,http://localhost:5173,http://127.0.0.1:5173
+      LANGFUSE_UI_URL: https://langfuse.local
+      GLITCHTIP_UI_URL: https://glitchtip.local
+      GRAFANA_UI_URL: https://grafana.local
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_URL: ""
+        VITE_KEYCLOAK_URL: https://auth.acme-relay.local
+        VITE_KEYCLOAK_REALM: acme
+        VITE_KEYCLOAK_CLIENT_ID: relay-frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

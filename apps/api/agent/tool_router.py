@@ -29,7 +29,7 @@ class CustomerNameArgs(BaseModel):
 
 
 class IssueKeyArgs(BaseModel):
-    issue_key: str = Field(..., description="Case key such as CASE-2001")
+    issue_key: str = Field(..., description="Case key such as OPS-3101")
 
 
 class CreateActionArgs(BaseModel):
@@ -97,10 +97,18 @@ async def _audit(
 
 async def build_langchain_tools(ctx: ToolContext) -> list[StructuredTool]:
     async def wrap(tool_name: str, coroutine, payload: dict[str, Any]) -> str:
+        await ctx.emit_progress("tool_start", tool=tool_name, source="native")
         started = time.perf_counter()
         result = await coroutine
         latency_ms = int((time.perf_counter() - started) * 1000)
         await _audit(ctx, tool_name, payload, result, latency_ms)
+        await ctx.emit_progress(
+            "tool_done",
+            tool=tool_name,
+            source="native",
+            latency_ms=latency_ms,
+            status="ok" if result.get("ok", False) else "error",
+        )
         return json.dumps(result, default=str)
 
     async def customer_profile(customer_name: str) -> str:

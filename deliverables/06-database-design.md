@@ -20,7 +20,7 @@ Detailed schema reference for **Relay**. PostgreSQL 16 + **pgvector** is the dur
 |------|---------|
 | `00-databases.sh` | Extra DBs (e.g. GlitchTip) |
 | `init.sql` | Core schema + enums (incl. `operations_user`) |
-| `seed.sql` | Meridian / Cascade / Northline |
+| `seed.sql` | VaultLedger / Nexus Freight / Aurora Bank |
 | `03-schema-enrichment.sql` | Idempotent backfill for existing volumes |
 | `04-rbac-operations-parity.sql` | RBAC tables, tenant columns, tasks, CSAT |
 
@@ -32,7 +32,7 @@ make migrate-db
 
 ## Design principles
 
-1. **Referential integrity** — Issues reference customers; chunks cascade with documents.
+1. **Referential integrity** — Issues reference customers; chunks nexus freight with documents.
 2. **RBAC dual-layer** — Keycloak JWT at runtime + `permissions` / `rbac_roles` tables for admin UX.
 3. **ACL before ANN** — Knowledge search filters `allowed_roles` then orders by embedding distance.
 4. **Audit by design** — Every tool call lands in `tool_call_audit` with `source`.
@@ -246,9 +246,9 @@ Filter **before** ranking — never retrieve then discard in the prompt.
 
 | Account | External ID | Flagship case |
 |---------|-------------|---------------|
-| Meridian Pay | `MERIDIAN` | CASE-2001 critical settlement |
-| Cascade Retail Group | `CASCADE` | CASE-2002 webhooks |
-| Northline Logistics | `NORTHLINE` | CASE-2003 POD delay |
+| VaultLedger Payments | `VAULTLEDGER` | OPS-3101 critical settlement |
+| Nexus Freight | `NEXUSFREIGHT` | OPS-3102 webhooks |
+| Aurora Bank | `AURORABANK` | OPS-3103 POD delay |
 
 Knowledge tiers: public SLA (all roles), internal playbook (support/ops/admin), restricted executive (admin).
 

@@ -12,7 +12,7 @@
 - Permission-aware RAG filter applied in SQL before ranking (not post-hoc in the prompt).
 - HITL staging for mutations vs immediate writes.
 - Prompt CI gate requirements (`version`, `production` label, `user_roles`).
-- Demo seed uniqueness (Meridian / Cascade / Northline — not copied from prior prototypes).
+- Demo seed uniqueness (VaultLedger / Nexus Freight / Aurora Bank — not copied from prior prototypes).
 
 ## What not to trust AI tools to do unsupervised in a client engagement
 

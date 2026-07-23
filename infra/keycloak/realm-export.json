@@ -47,9 +47,20 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["http://localhost:5173/*", "http://127.0.0.1:5173/*"],
-      "webOrigins": ["http://localhost:5173", "http://127.0.0.1:5173", "+"],
-      "attributes": { "post.logout.redirect.uris": "http://localhost:5173/*" }
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "https://acme-relay.local/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://acme-relay.local",
+        "+"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:5173/*##https://acme-relay.local/*"
+      }
     },
     {
       "clientId": "relay-backend",

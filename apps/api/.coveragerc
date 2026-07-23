@@ -17,7 +17,6 @@ omit =
     routers/tasks.py
     routers/account.py
     routers/admin.py
-    routers/evaluations.py
 
 [report]
 fail_under = 80

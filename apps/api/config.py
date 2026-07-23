@@ -1,10 +1,15 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     database_url: str = "postgresql://relay:relay_secret@localhost:5434/relay_ops"
     redis_url: str = "redis://:redis_secret@localhost:6381/0"
@@ -15,6 +20,8 @@ class Settings(BaseSettings):
     keycloak_realm: str = "acme"
     keycloak_client_id: str = "relay-backend"
     keycloak_frontend_client_id: str = "relay-frontend"
+    keycloak_admin_user: str = Field(default="admin", alias="KEYCLOAK_ADMIN")
+    keycloak_admin_password: str = Field(default="admin", alias="KEYCLOAK_ADMIN_PASSWORD")
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
@@ -33,9 +40,20 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "http://localhost:3001"
+    langfuse_ui_url: str = "http://localhost:3001"
+    langfuse_project_id: str = "relay-ops"
+
+    enable_langsmith: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "relay-agent"
+    langsmith_org_id: str = ""
+    langsmith_ui_url: str = "https://smith.langchain.com"
 
     enable_glitchtip: bool = True
     glitchtip_dsn: str = ""
+    glitchtip_ui_url: str = "http://localhost:8001"
+
+    grafana_ui_url: str = "http://localhost:3002"
 
     cors_origins: str = "http://localhost:5173"
     frontend_url: str = "http://localhost:5173"

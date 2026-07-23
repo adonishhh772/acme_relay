@@ -22,6 +22,12 @@ class ToolContext:
     request_id: str = field(default_factory=lambda: uuid4().hex)
     pending_approvals: list[dict[str, Any]] = field(default_factory=list)
     tool_calls_log: list[dict[str, Any]] = field(default_factory=list)
+    progress: Any | None = None
+
+    async def emit_progress(self, event_type: str, **payload: Any) -> None:
+        if self.progress is None:
+            return
+        await self.progress.emit(event_type, **payload)
 
     async def run_mcp(self, name: str, tool: Any, args: dict[str, Any]) -> str:
         """Invoke an MCP tool with RBAC, audit, and groundedness logging."""
@@ -40,6 +46,7 @@ class ToolContext:
             )
             return json.dumps(denied, default=str)
 
+        await self.emit_progress("tool_start", tool=name, source="mcp")
         started = time.perf_counter()
         try:
             raw = await tool.ainvoke(args)
@@ -50,6 +57,13 @@ class ToolContext:
             result = {"ok": False, "error": "mcp_call_failed", "message": str(exc)}
             text = json.dumps(result)
         latency_ms = int((time.perf_counter() - started) * 1000)
+        await self.emit_progress(
+            "tool_done",
+            tool=name,
+            source="mcp",
+            latency_ms=latency_ms,
+            status="ok" if result.get("ok", False) else "error",
+        )
         role_values = [role.value for role in self.roles]
         async with acquire() as connection:
             await connection.execute(
@@ -108,7 +122,8 @@ async def get_customer_profile_by_name(
     async with acquire() as connection:
         row = await connection.fetchrow(
             """
-            SELECT external_id, name, industry, tier, account_owner, region
+            SELECT external_id, name, industry, tier, account_owner, support_manager,
+                   account_manager, region, contract_value_gbp, renewal_date
             FROM customers
             WHERE is_active = true
               AND (name ILIKE $1 OR external_id ILIKE $1)
@@ -123,7 +138,12 @@ async def get_customer_profile_by_name(
             "error": "not_found",
             "message": f"No customer matching '{customer_name}'.",
         }
-    return {"ok": True, "customer": dict(row)}
+    customer = dict(row)
+    if customer.get("renewal_date") is not None:
+        customer["renewal_date"] = customer["renewal_date"].isoformat()
+    if customer.get("contract_value_gbp") is not None:
+        customer["contract_value_gbp"] = float(customer["contract_value_gbp"])
+    return {"ok": True, "customer": customer}
 
 
 async def get_open_issues(ctx: ToolContext, customer_name: str) -> dict[str, Any]:

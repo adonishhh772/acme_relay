@@ -1,5 +1,6 @@
 .env
 .venv/
+infra/caddy/.certs/
 __pycache__/
 *.pyc
 .pytest_cache/

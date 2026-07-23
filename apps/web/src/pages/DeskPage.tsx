@@ -1,5 +1,7 @@
+import { LayoutGrid } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { PageHeader } from "../components/layout/PageHeader";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -20,20 +22,30 @@ export function DeskPage() {
   }, [token]);
 
   return (
-    <div data-testid="desk-page">
-      <h1>Desk</h1>
-      <div className="grid-3">
-        <div className="stat">
-          Open cases
-          <strong>{summary?.open_cases ?? "—"}</strong>
+    <div data-testid="desk-page" className="p-6 lg:p-8">
+      <PageHeader
+        icon={LayoutGrid}
+        title="Desk"
+        description="Lightweight snapshot of open cases and pending actions for your role."
+      />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="card p-4">
+          <p className="section-label">Open cases</p>
+          <strong className="mt-1 block font-display text-2xl">
+            {summary?.open_cases ?? "—"}
+          </strong>
         </div>
-        <div className="stat">
-          Critical
-          <strong>{summary?.critical_cases ?? "—"}</strong>
+        <div className="card p-4">
+          <p className="section-label">Critical</p>
+          <strong className="mt-1 block font-display text-2xl">
+            {summary?.critical_cases ?? "—"}
+          </strong>
         </div>
-        <div className="stat">
-          Pending actions
-          <strong>{summary?.pending_actions ?? "—"}</strong>
+        <div className="card p-4">
+          <p className="section-label">Pending actions</p>
+          <strong className="mt-1 block font-display text-2xl">
+            {summary?.pending_actions ?? "—"}
+          </strong>
         </div>
       </div>
     </div>

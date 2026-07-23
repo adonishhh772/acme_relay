@@ -1,5 +1,7 @@
+import { BookOpen } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeader } from "../components/layout/PageHeader";
 import { apiFetch } from "../lib/api";
 import { canIngest } from "../lib/rbac";
 import { useAuth } from "../providers/AuthProvider";
@@ -39,19 +41,22 @@ export function KnowledgePage() {
     }, 2000);
   }
 
+  const ingestAction = canIngest(roles) ? (
+    <button type="button" className="btn-primary" onClick={() => void handleIngest()}>
+      Run ingest
+    </button>
+  ) : null;
+
   return (
-    <div data-testid="knowledge-page">
-      <h1>Knowledge</h1>
-      <p style={{ color: "var(--ink-muted)" }}>
-        Celery ingests docs into pgvector with role metadata for permission-aware RAG.
-      </p>
-      {canIngest(roles) ? (
-        <button type="button" className="btn" onClick={() => void handleIngest()}>
-          Run ingest
-        </button>
-      ) : null}
-      {message ? <p className="mono">{message}</p> : null}
-      <div className="panel" style={{ marginTop: "1rem" }}>
+    <div data-testid="knowledge-page" className="p-6 lg:p-8">
+      <PageHeader
+        icon={BookOpen}
+        title="Knowledge"
+        description="Celery ingests docs into pgvector with role metadata for permission-aware RAG."
+        actions={ingestAction}
+      />
+      {message ? <p className="mb-4 mono text-sm text-ink-secondary">{message}</p> : null}
+      <div className="card overflow-hidden">
         <table className="table">
           <thead>
             <tr>

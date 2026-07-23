@@ -35,6 +35,11 @@ async def invoke_agent(
     query: str, ctx: ToolContext, *, thread_id: str | None = None
 ) -> dict[str, Any]:
     settings = get_settings()
+    await ctx.emit_progress(
+        "plan",
+        plan=["Understand question", "Select tools", "Compose answer", "Verify groundedness"],
+    )
+    await ctx.emit_progress("agent", agent="react", label="Building toolbelt")
     agent = await build_react_agent(ctx)
     roles = ",".join(sorted(role.value for role in ctx.roles))
     compiled = prompt_service.compile_system(user_roles=roles)
@@ -61,6 +66,7 @@ async def invoke_agent(
         tags=["relay", "react", *roles.split(",")[:3]],
         run_name="relay-agent",
     )
+    await ctx.emit_progress("compose", label="Running ReAct agent")
     try:
         result = await agent.ainvoke(
             {
@@ -73,6 +79,7 @@ async def invoke_agent(
         )
     finally:
         flush_langfuse_callbacks(callbacks)
+    await ctx.emit_progress("compose", label="Checking groundedness")
 
     messages = result.get("messages") or []
     answer = ""
