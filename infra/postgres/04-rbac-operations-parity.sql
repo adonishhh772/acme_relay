@@ -151,7 +151,7 @@ WHERE r.slug = 'support_user'
   AND p.key IN (
       'read_customer', 'read_issues', 'read_issue_updates', 'summarize_issues',
       'update_issue', 'create_next_action', 'recommend_action', 'search_knowledge',
-      'ingest_knowledge', 'run_skill', 'mcp_read', 'mcp_sql', 'manage_tasks'
+      'run_skill', 'mcp_read', 'mcp_sql', 'manage_tasks'
   )
 ON CONFLICT DO NOTHING;
 

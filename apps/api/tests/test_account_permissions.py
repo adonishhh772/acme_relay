@@ -14,3 +14,10 @@ def test_operations_permission_matrix() -> None:
     assert Role.OPERATIONS in PERMISSIONS["view_audit"]
     assert Role.OPERATIONS not in PERMISSIONS["manage_users"]
     assert Role.OPERATIONS not in PERMISSIONS["run_evals"]
+
+
+def test_ingest_knowledge_ops_and_admin_only() -> None:
+    assert Role.SUPPORT not in PERMISSIONS["ingest_knowledge"]
+    assert Role.SALES not in PERMISSIONS["ingest_knowledge"]
+    assert Role.OPERATIONS in PERMISSIONS["ingest_knowledge"]
+    assert Role.ADMIN in PERMISSIONS["ingest_knowledge"]

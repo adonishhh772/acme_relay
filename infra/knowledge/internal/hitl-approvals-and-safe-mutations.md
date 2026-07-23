@@ -19,6 +19,7 @@ Relay’s commercial promise is **speed with control**. Customer-facing commitme
 | Search public knowledge | ✓ | ✓ | ✓ | ✓ |
 | Search internal knowledge | ✗ | ✓ | ✓ | ✓ |
 | Search restricted knowledge | ✗ | ✗ | ✗ | ✓ |
+| Ingest knowledge (Celery) | ✗ | ✗ | ✓ | ✓ |
 | Create next action | ✗ | ✓ | ✓ | ✓ |
 | Approve next action | ✗ | ✗ | ✗ | ✓ |
 | Update issues / MCP SQL | ✗ | ✓* | ✓ | ✓ |

@@ -1,184 +1,399 @@
 # Relay — Acme Operations Command Desk
 
-**Relay** is an agentic enterprise assistant for the fictional client **Acme Operations**. Staff ask operational questions; a LangGraph ReAct agent selects tools dynamically against PostgreSQL, Redis session memory, **MCP servers (wired into the agent)**, and **RBAC-aware RAG** (pgvector), with post-answer **groundedness** checks.
+**Relay** is an agentic enterprise assistant for the fictional client **Acme Operations**. Staff ask operational questions in natural language; a **LangGraph ReAct** agent selects tools dynamically against PostgreSQL, Redis session memory, **MCP servers**, and **RBAC-aware RAG** (pgvector), then applies a post-answer **groundedness** check before the reply reaches the desk.
 
-This tree is an original implementation (product **Relay** / **Command Desk**). It follows the same *architectural patterns* as the sibling inspiration project under the parent folder, but uses a distinct UI, seed data (VaultLedger / Nexus Freight / Aurora Bank), and codebase — not a reskin.
+This repository is an original product implementation (**Relay** / **Command Desk**). It shares architectural *patterns* with sibling Ops work, but uses a distinct UI, seed portfolio (**VaultLedger Payments**, **Aurora Bank**, **Nexus Freight**), and codebase — not a reskin.
 
-> Located at `acme-relay/` inside the workspace. Prefer promoting this directory to its own git remote for submission.
+| | |
+|--|--|
+| **Stack** | FastAPI · LangGraph · React/Vite · Keycloak · Postgres/pgvector · Redis · Celery · Caddy/mkcert |
+| **Identity** | `sales_user` · `support_user` · `operations_user` · `admin` (+ TOTP MFA) |
+| **Local entry** | `make demo` → **https://acme-relay.local** (TLS by default) |
+| **Deliverables** | [`deliverables/`](deliverables/README.md) |
+
+---
+
+## Table of contents
+
+1. [Quick start](#quick-start)
+2. [Service URLs](#service-urls)
+3. [Demo users & seed data](#demo-users--seed-data)
+4. [Architecture overview](#architecture-overview)
+5. [Request path (chat turn)](#request-path-chat-turn)
+6. [Local HTTPS edge](#local-https-edge)
+7. [RBAC, HITL & knowledge ACL](#rbac-hitl--knowledge-acl)
+8. [MCP integration](#mcp-integration)
+9. [Knowledge base](#knowledge-base)
+10. [Observability](#observability)
+11. [Evaluation](#evaluation)
+12. [Quality & Kubernetes](#quality--kubernetes)
+13. [Repository layout](#repository-layout)
+14. [Further documentation](#further-documentation)
+
+---
 
 ## Quick start
 
 ```bash
 cd acme-relay
-cp .env.example .env   # add OPENAI_API_KEY for best LLM/embeddings quality
+cp .env.example .env          # set OPENAI_API_KEY for LLM + embeddings
 chmod +x infra/postgres/00-databases.sh
-make demo              # docker compose up --build -d
-make migrate-db        # if upgrading an existing Postgres volume
+brew install mkcert nss       # once — local HTTPS trust store
+make demo                     # certs + Caddy TLS + full Compose stack
+make migrate-db               # RBAC / AM / knowledge catalog upgrades on existing volumes
 ```
 
-| Service | URL (HTTP) | URL (HTTPS — `make tls-up`) |
-|---------|------------|-------------------------------|
-| Command Desk | http://localhost:5173 | https://acme-relay.local |
-| API docs | http://localhost:8000/docs | https://api.acme-relay.local/docs |
-| MCP status | http://localhost:8000/api/mcp/status (auth) | https://api.acme-relay.local/api/mcp/status |
-| Keycloak | http://localhost:8080 | https://auth.acme-relay.local |
-| Langfuse | http://localhost:3001 | https://langfuse.local |
-| GlitchTip | http://localhost:8001 | https://glitchtip.local |
-| Grafana | http://localhost:3002 (admin / admin) | https://grafana.local |
+**Prerequisites:** Docker Compose 24+, Make, mkcert (for TLS). Optional: Node 20+ / Python 3.11+ for local tests.
 
-### Local HTTPS (mkcert + Caddy)
+| Command | Purpose |
+|---------|---------|
+| `make demo` | Default path — HTTPS via Caddy + `*.local` |
+| `make demo-http` | Escape hatch — `http://localhost:*` without Caddy |
+| `make down` | Tear down the TLS stack |
+| `make migrate-db` | Apply SQL upgrades (`03`…`08`) |
+| `make eval-host` | Live eval suite against HTTPS API |
+| `make quality` | Lint + pytest coverage ≥ 80% |
+
+After first boot, as **dana** or **admin**: open **Knowledge → Run ingest** so pgvector chunks match the Markdown under `infra/knowledge/`.
+
+---
+
+## Service URLs
+
+| Service | URL (`make demo`) | Notes |
+|---------|-------------------|--------|
+| **Command Desk** | https://acme-relay.local | React SPA; `/api` proxied to FastAPI |
+| **API / OpenAPI** | https://api.acme-relay.local/docs | Bearer JWT from Keycloak |
+| **MCP status** | https://api.acme-relay.local/api/mcp/status | Auth required |
+| **Keycloak** | https://auth.acme-relay.local | Realm `acme` |
+| **Langfuse** | https://langfuse.local | Agent + tool traces |
+| **GlitchTip** | https://glitchtip.local | Exceptions |
+| **Grafana** | https://grafana.local | `admin` / `admin` (change in prod) |
+
+HTTP fallback (`make demo-http`): desk on http://localhost:5173, API http://localhost:8000, Keycloak http://localhost:8080.
+
+Details: [docs/local-https.md](docs/local-https.md).
+
+---
+
+## Demo users & seed data
+
+| User | Password | Role | Typical use |
+|------|----------|------|-------------|
+| `alice` | `alice123` | `sales_user` | Read customers/issues; public knowledge; **no** mutations / SQL MCP / ingest |
+| `bob` | `bob123` | `support_user` | Cases + HITL next actions; search public/internal KB; **no** ingest |
+| `dana` | `dana123` | `operations_user` | Mutations + audit + **knowledge ingest**; no admin/evals |
+| `admin` | `admin123` | `admin` | Approvals, RBAC UI, evals, restricted KB, MFA admin |
+
+Enable TOTP in Keycloak for MFA demos.
+
+### Seed portfolio
+
+| Account | ID | Tier | Contract | Renewal | Flagship case |
+|---------|-----|------|----------|---------|---------------|
+| VaultLedger Payments | `VAULTLEDGER` | Strategic | £680k | 2026-09-30 | **OPS-3101** settlement pending (critical) |
+| Aurora Bank | `AURORABANK` | Standard | £185k | 2026-08-20 | **OPS-3102** webhook retries (high) |
+| Nexus Freight | `NEXUSFREIGHT` | Enterprise | £420k | 2026-11-15 | **OPS-3103** POD delay NL-03 (medium) |
+
+Desk features: Account 360 / risk scores, AM KPIs + charts, approvals inbox (seeded + agent-staged HITL), step-by-step Evaluations UI, AI Governance metrics.
+
+---
+
+## Architecture overview
+
+High-level system (also in [`deliverables/03-architecture-diagram.mmd`](deliverables/03-architecture-diagram.mmd)):
+
+```mermaid
+flowchart TB
+  subgraph clients [Clients]
+    Web["Command Desk<br/>apps/web React + Vite"]
+    ExtMCP["External MCP clients<br/>optional"]
+  end
+
+  subgraph edge [Local TLS edge]
+    Caddy["Caddy + mkcert<br/>acme-relay.local · api · auth · obs"]
+  end
+
+  subgraph auth [Identity]
+    KC["Keycloak<br/>JWT · TOTP · 4 roles"]
+  end
+
+  subgraph api [apps/api — FastAPI]
+    Routers["Routers<br/>chat · desk · approvals · knowledge<br/>admin · evals · governance · audit"]
+    Agent["LangGraph ReAct"]
+    Tools["Native tools + skills<br/>RBAC · HITL · audit"]
+    Ground["Groundedness verifier"]
+    MCPClient["MCP client<br/>langchain-mcp-adapters"]
+    Routers --> Agent
+    Agent --> Tools
+    Agent --> MCPClient
+    Agent --> Ground
+  end
+
+  subgraph mcp [MCP SSE]
+    DomainMCP["mcp-domain :8090"]
+    FsMCP["mcp-filesystem :8091"]
+    PgMCP["mcp-postgres :8092<br/>SELECT only"]
+  end
+
+  subgraph data [Data]
+    PG[("PostgreSQL 16 + pgvector<br/>cases · RBAC · audit · RAG")]
+    Redis[("Redis Stack<br/>sessions · checkpoints · Celery")]
+    KB["infra/knowledge<br/>public · internal · restricted"]
+  end
+
+  subgraph async [Async]
+    Celery["Celery worker<br/>chunk + embed"]
+  end
+
+  subgraph obs [Observability]
+    Langfuse["Langfuse"]
+    GlitchTip["GlitchTip"]
+    Grafana["Prometheus → Grafana"]
+  end
+
+  Web --> Caddy
+  Caddy --> Routers
+  Web -->|OIDC| KC
+  Routers -->|validate JWT| KC
+  Tools --> PG
+  Tools --> Redis
+  MCPClient --> DomainMCP
+  MCPClient --> FsMCP
+  MCPClient --> PgMCP
+  ExtMCP --> mcp
+  DomainMCP --> PG
+  FsMCP --> KB
+  PgMCP --> PG
+  Celery --> KB
+  Celery --> PG
+  Routers --> Celery
+  Agent --> Langfuse
+  Agent --> PG
+  Agent -.-> GlitchTip
+  Routers --> Grafana
+```
+
+### Component responsibilities
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Web** | Command Desk UX — Assistant, Dashboard, Customers, Issues, Tasks, Approvals, Knowledge, Audit, Governance, Admin, Trust/Help |
+| **API** | JWT validation, permission gates, chat orchestration, desk/AM APIs, durable approvals, eval runner, governance metrics |
+| **Agent** | Single `create_react_agent`; native tools + 4 skills + MCP tools; Redis checkpointer |
+| **Groundedness** | Post-answer claim check vs tool corpus → `agent_runs` + `ChatResponse` |
+| **Worker** | Knowledge ingest: chunk, embed, write `knowledge_chunks` with `allowed_roles` |
+| **MCP** | Domain (customers/cases), Filesystem (KB files), Postgres (SELECT-only) |
+| **Auth** | Keycloak realm roles; runtime matrix in `apps/api/auth/rbac.py`; catalog in Postgres `role_permissions` |
+| **Obs** | Langfuse (LLM/tools), Postgres audit, GlitchTip, Grafana |
+
+More detail: [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Request path (chat turn)
+
+```mermaid
+sequenceDiagram
+  participant U as Desk user
+  participant W as Web / Caddy
+  participant K as Keycloak
+  participant A as FastAPI
+  participant G as LangGraph ReAct
+  participant T as Tools / MCP / Skills
+  participant P as Postgres / Redis
+  participant L as Langfuse
+
+  U->>W: Open desk (HTTPS)
+  W->>K: OIDC login (+ optional TOTP)
+  K-->>W: Access token (realm roles)
+  U->>W: Chat query
+  W->>A: POST /api/chat (+ Bearer)
+  A->>K: Validate JWT / iss
+  A->>G: invoke_agent(ToolContext)
+  loop ReAct
+    G->>T: Tool / skill / MCP call
+    T->>P: Query / stage HITL / RAG ACL
+    T-->>G: Tool result (+ audit row)
+  end
+  G->>G: verify_groundedness
+  G->>P: agent_runs + pending_approvals
+  G->>L: Trace spans
+  G-->>A: Answer + tools + groundedness
+  A-->>W: ChatResponse
+  W-->>U: Stream / final answer
+```
+
+Mutating tools (`create_next_action`, `update_issue`) **stage HITL** — they appear on **Approvals** (durable Postgres) until an admin decides. Seeded pending next actions (e.g. VaultLedger bridge) appear in the same inbox.
+
+---
+
+## Local HTTPS edge
+
+```mermaid
+flowchart LR
+  Browser --> Caddy
+  Caddy -->|acme-relay.local| Web[web:80]
+  Caddy -->|api.acme-relay.local| API[api:8000]
+  Caddy -->|auth.acme-relay.local| KC[keycloak:8080]
+  Caddy -->|glitchtip.local| GT[glitchtip]
+  Caddy -->|langfuse.local| LF[langfuse]
+  Caddy -->|grafana.local| GF[grafana]
+```
+
+- Overlay: [`docker-compose.tls.yml`](docker-compose.tls.yml) + [`infra/caddy/Caddyfile`](infra/caddy/Caddyfile)
+- Certs: `make tls-certs` → `infra/caddy/.certs/` (gitignored), via mkcert
+- JWT `iss` must be `https://auth.acme-relay.local` when using `make demo`
+
+---
+
+## RBAC, HITL & knowledge ACL
+
+### Runtime permission highlights
+
+| Permission | sales | support | operations | admin |
+|------------|:-----:|:-------:|:----------:|:-----:|
+| `read_customer` / `read_issues` / `search_knowledge` | ✓ | ✓ | ✓ | ✓ |
+| `create_next_action` / `update_issue` / `mcp_sql` | | ✓ | ✓ | ✓ |
+| `ingest_knowledge` | | | ✓ | ✓ |
+| `view_audit` | | | ✓ | ✓ |
+| `approve_next_action` / `run_evals` / `manage_users` | | | | ✓ |
+
+**Enterprise boundary:** support may **search** knowledge; only **operations + admin** may **ingest** (rebuild RAG corpus).
+
+Knowledge retrieval also applies **document ACL** (`allowed_roles` on chunks) *before* vector ranking — sales never receives restricted executive protocol content even though they can call `search_knowledge`.
+
+Admin → **RBAC control** edits Postgres `role_permissions` (catalog). Live tool allow/deny currently follows `apps/api/auth/rbac.py` — keep them aligned when changing policy.
+
+---
+
+## MCP integration
+
+| Server | Port | Example tools | Permission |
+|--------|------|---------------|------------|
+| Domain | 8090 | `domain_relay_get_customer_by_name`, list open issues | `mcp_read` |
+| Filesystem | 8091 | `filesystem_fs_read_file`, list directory | `mcp_read` |
+| Postgres | 8092 | `postgres_postgres_query` (SELECT only) | `mcp_sql` |
+
+Agent loads MCP tools when `ENABLE_MCP_AGENT_TOOLS=true` (default). Status: `GET /api/mcp/status`. Startup calls `warm_mcp_tools()` (non-fatal on failure).
+
+---
+
+## Knowledge base
+
+Corpus under [`infra/knowledge/`](infra/knowledge/) (mounted at `/data/knowledge`):
+
+| Tier | Examples | Who retrieves |
+|------|----------|---------------|
+| **Public** | Command Desk business value; SLA / commercial guide | All staff |
+| **Internal** | Escalation; VaultLedger / Aurora / Nexus runbooks; HITL guide | support, operations, admin |
+| **Restricted** | Executive incident protocol; commercial renewal war-room | **admin only** |
 
 ```bash
-brew install mkcert nss   # once
-make tls-certs            # trust local CA + write certs + /etc/hosts
-make tls-up               # stack behind https://*.local
+make migrate-db                                    # catalog rows (07 + ingest ACL 08)
+# dana or admin → Knowledge → Run ingest
 ```
 
-See [docs/local-https.md](docs/local-https.md). Plain `make demo` still uses localhost HTTP.
+---
 
-### Demo users
+## Observability
 
-| User | Password | Role |
-|------|----------|------|
-| `alice` | `alice123` | `sales_user` (read-only; no Postgres MCP) |
-| `bob` | `bob123` | `support_user` (mutate via approval) |
-| `dana` | `dana123` | `operations_user` (mutate + audit; no admin) |
-| `admin` | `admin123` | `admin` |
+| System | Role |
+|--------|------|
+| **Langfuse** | LLM generations, tool spans, prompt name/version, session/user, I/O |
+| **Postgres** | `tool_call_audit` (`source` native/mcp), `agent_runs` (groundedness), HITL `pending_approvals` |
+| **GlitchTip** | Exceptions |
+| **Grafana / Prometheus** | API metrics |
 
-Enable TOTP in Keycloak account console to demonstrate MFA.
+Audit UI expands rows with deep links when observability URLs are configured.
 
-### Seed accounts (cases)
+---
 
-- **VaultLedger Payments** (`VAULTLEDGER`) — OPS-3101 critical settlement · £680k · renewal 2026-09-30
-- **Aurora Bank** (`AURORABANK`) — OPS-3102 payment webhooks · £185k · renewal 2026-08-20
-- **Nexus Freight** (`NEXUSFREIGHT`) — OPS-3103 POD delay · £420k · renewal 2026-11-15
+## Evaluation
 
-### Account management (Command Desk)
+10-question live suite (`evals/eval_questions.json`) covering tool selection, groundedness, RBAC (incl. restricted KB), and HITL next actions.
 
-- Customer commercial fields: contract value, renewal date, account/support managers
-- Account risk scores + Account 360 drawer on `/customers`
-- Dashboard AM KPIs, renewal panel, bar charts + 30-day line trends (`metric_snapshots`)
-- Assistant profile tool returns AM fields for VaultLedger / Nexus / Aurora
-
-## Architecture
-
-See [docs/architecture.md](docs/architecture.md), [docs/database-schema.md](docs/database-schema.md), [docs/threat-model.md](docs/threat-model.md), and [docs/tradeoffs.md](docs/tradeoffs.md).
-
-```
-Keycloak (MFA) → Relay Web (Command Desk)
-                      ↓
-                 FastAPI + LangGraph ReAct
-                      ↓
-     Native tools · Skills · MCP (domain/postgres/filesystem)
-                      ↓
-              Groundedness verifier
-                      ↓
-     PostgreSQL+pgvector (durable + RAG ACL) · Redis (session/Celery)
-                      ↓
-     Celery worker (ingest) · Langfuse · GlitchTip · Grafana
+```bash
+make demo
+make eval-host
+# or UI: admin → Evaluations → Run suite (Step 1…N progress)
 ```
 
-## Brief coverage
+Results → [`evals/eval_results.md`](evals/eval_results.md). Commentary → [`deliverables/04-eval-results.md`](deliverables/04-eval-results.md).
+
+---
+
+## Quality & Kubernetes
+
+```bash
+make quality           # ruff + pytest coverage ≥ 80%
+make kustomize-build   # Ingress + NetworkPolicy + MCP Deployments
+make argocd-apply      # after setting repoURL in Argo Application
+```
+
+GitOps notes: [docs/argocd.md](docs/argocd.md), [infra/kubernetes/README.md](infra/kubernetes/README.md).
+
+### Brief coverage
 
 | Requirement | Relay |
 |-------------|-------|
 | Dynamic LLM tool use | LangGraph ReAct |
-| Profile / open issues / summarise / next action | Native tools |
-| MCP | Domain + Postgres + Filesystem **loaded into agent** |
-| Groundedness | Post-answer verifier + `agent_runs` columns |
-| Skill | Escalation (+ SLA, triage, handoff) |
-| Keycloak + RBAC | sales / support / **operations** / admin + DB RBAC tables |
-| Product UX | Dashboard, customers, issues, tasks, admin, account, trust/help |
-| Postgres + Redis | pgvector Postgres + Redis Stack |
-| Compose | `docker compose up` |
-| K8s | Ingress + NetworkPolicy + MCP Deployments + Argo CD |
-| Eval + observability | `evals/` + Langfuse/GlitchTip/Grafana |
-| Docs | Architecture, schema, threat model, runbooks, CONTRIBUTING |
+| Profile / issues / summarise / next action | Native tools |
+| MCP in the agent | Domain + Postgres + Filesystem |
+| Groundedness | Post-answer verifier + `agent_runs` |
+| Skills | Escalation, SLA, triage, handoff |
+| Keycloak + RBAC | 4 roles + DB catalog; ingest = ops/admin |
+| Compose + local TLS | `make demo` (Caddy/mkcert) |
+| K8s | Ingress, NetworkPolicy, MCP, Argo CD |
+| Eval + observability | `evals/` + Langfuse / GlitchTip / Grafana |
 
-## MCP (agent integration)
+---
 
-Three MCP servers run in Compose/K8s. The chat agent loads their tools when `ENABLE_MCP_AGENT_TOOLS=true` (default):
+## Repository layout
 
-| Server | Port | Example agent tool names |
-|--------|------|--------------------------|
-| Domain | 8090 | `domain_relay_get_customer_by_name`, `domain_relay_list_open_issues` |
-| Filesystem | 8091 | `filesystem_fs_read_file`, `filesystem_fs_list_directory` |
-| Postgres | 8092 | `postgres_postgres_query` (SELECT only; support/admin) |
-
-- Status: `GET /api/mcp/status`
-- Warm-up: API lifespan calls `warm_mcp_tools()` (non-fatal on failure)
-
-## Knowledge ingest + RBAC RAG
-
-Rich demo corpus under `infra/knowledge/` (mounted at `/data/knowledge`):
-
-| Tier | Docs | Roles |
-|------|------|-------|
-| **Public** | Command Desk business value; tier/SLA/commercial guide | all staff |
-| **Internal** | Escalation; VaultLedger / Aurora / Nexus runbooks; HITL approvals | support, operations, admin |
-| **Restricted** | Executive incident protocol; commercial renewal war-room | admin only |
-
-```bash
-make migrate-db   # refresh knowledge_documents catalog (07-knowledge-business-value.sql)
-# After login as bob/admin in UI: Knowledge → Run ingest
-# Or enqueue via API POST /api/knowledge/ingest
+```text
+acme-relay/
+├── apps/
+│   ├── api/           # FastAPI, LangGraph agent, RBAC, routers
+│   ├── web/           # Command Desk (React)
+│   ├── worker/        # Celery knowledge ingest
+│   ├── mcp-domain/
+│   ├── mcp-filesystem/
+│   └── mcp-postgres/
+├── infra/
+│   ├── caddy/         # TLS Caddyfile (+ .certs/ gitignored)
+│   ├── knowledge/     # RAG Markdown (public / internal / restricted)
+│   ├── keycloak/      # Realm export
+│   ├── postgres/      # init, seed, migrations 03–08
+│   └── kubernetes/    # Deployments, Ingress, NetPol, Argo
+├── evals/             # Questions + live runner
+├── deliverables/      # Submission pack
+├── docs/              # Architecture, threat model, HTTPS, runbooks
+├── docker-compose.yml
+├── docker-compose.tls.yml
+└── Makefile
 ```
 
-Chunks store `allowed_roles` + `sensitivity`. `search_knowledge` filters by the caller’s JWT roles **before** vector ranking.
+---
 
-## Observability (Langfuse + more)
+## Further documentation
 
-| System | What you see |
-|--------|----------------|
-| **Langfuse** http://localhost:3001 | Full agent run: LLM generations, tool spans, prompt name/version, session/user, request I/O |
-| **Postgres audit** | Durable `tool_call_audit` (`source` native/mcp) + `agent_runs` (incl. groundedness) |
-| **GlitchTip** | Exceptions / error tracking |
-| **Grafana** | API metrics dashboards |
-
-## Evaluation (live)
-
-```bash
-make demo
-make eval-host   # or: make eval  (inside API container)
-```
-
-Scores tool selection, groundedness, RBAC, next-action/HITL, latency → [`evals/eval_results.md`](evals/eval_results.md).
-
-## Quality
-
-```bash
-make quality                 # lint + pytest coverage ≥80%
-make kustomize-build         # Ingress + NetworkPolicy present
-```
-
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
-
-## Kubernetes / Argo CD
-
-See **[docs/argocd.md](docs/argocd.md)** and **[infra/kubernetes/README.md](infra/kubernetes/README.md)**.
-
-- Kustomize base: api, worker, web, **MCP**, **Ingress**, **NetworkPolicies**, secrets example
-- Argo CD Application: `infra/kubernetes/platform/argo-cd/applications.yaml`
-- `make argocd-apply` after editing `repoURL` to your Git remote
-
-## Submission deliverables
-
-Assessment pack (mirrors Ops structure): **[deliverables/README.md](deliverables/README.md)**
-
-| # | Artifact |
-|---|----------|
-| 1 | Repository access / zip |
-| 2 | Setup, architecture, trade-offs |
-| 3 | Architecture diagram (Mermaid) |
-| 4 | Eval results + commentary |
-| 5 | AI usage notes |
-| 6 | Database design |
-| 7 | Agentic AI & LangGraph |
+| Doc | Topic |
+|-----|--------|
+| [docs/architecture.md](docs/architecture.md) | Components, MCP, scaling |
+| [docs/database-schema.md](docs/database-schema.md) | Schema |
+| [docs/threat-model.md](docs/threat-model.md) | Threats & mitigations |
+| [docs/tradeoffs.md](docs/tradeoffs.md) | Design trade-offs |
+| [docs/local-https.md](docs/local-https.md) | mkcert / Caddy |
+| [docs/skills.md](docs/skills.md) | Agent skills |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Dev workflow |
+| [deliverables/README.md](deliverables/README.md) | Assessment artifacts 1–7 |
+| [deliverables/03-architecture-diagram.mmd](deliverables/03-architecture-diagram.mmd) | Canonical Mermaid source |
 
 ```bash
 make deliverables-zip   # → deliverables/relay-command-desk-source.zip
 ```
 
-## AI usage notes
+### AI usage notes
 
 See [docs/ai-usage-notes.md](docs/ai-usage-notes.md) and [deliverables/05-ai-usage-notes.md](deliverables/05-ai-usage-notes.md).

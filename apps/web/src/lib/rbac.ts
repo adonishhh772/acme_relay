@@ -25,11 +25,7 @@ export function canSeeGovernance(roles: string[]): boolean {
 }
 
 export function canIngest(roles: string[]): boolean {
-  return (
-    hasRole(roles, "support_user") ||
-    hasRole(roles, "operations_user") ||
-    hasRole(roles, "admin")
-  );
+  return hasRole(roles, "operations_user") || hasRole(roles, "admin");
 }
 
 export function canManageUsers(roles: string[]): boolean {

@@ -24,19 +24,22 @@ Optional: `kubectl` for Kubernetes / Argo CD chapter.
 ```bash
 cp .env.example .env          # add OPENAI_API_KEY
 chmod +x infra/postgres/00-databases.sh
-make demo                     # build stack
+brew install mkcert nss       # once — local HTTPS
+make demo                     # TLS stack (Caddy + *.local)
 make migrate-db               # RBAC + tasks + CSAT enrichment
 ```
 
+Prerequisite: **mkcert** (for `make demo` HTTPS). HTTP-only: `make demo-http`.
+
 | Service | URL |
 |---------|-----|
-| **Command Desk** | http://localhost:5173 |
-| **Dashboard** | http://localhost:5173/dashboard |
-| **API docs** | http://localhost:8000/docs |
-| **Keycloak** | http://localhost:8080 |
-| **Langfuse** | http://localhost:3001 |
-| **GlitchTip** | http://localhost:8001 |
-| **Grafana** | http://localhost:3002 |
+| **Command Desk** | https://acme-relay.local |
+| **Dashboard** | https://acme-relay.local/dashboard |
+| **API docs** | https://api.acme-relay.local/docs |
+| **Keycloak** | https://auth.acme-relay.local |
+| **Langfuse** | https://langfuse.local |
+| **GlitchTip** | https://glitchtip.local |
+| **Grafana** | https://grafana.local |
 
 ### Environment configuration
 

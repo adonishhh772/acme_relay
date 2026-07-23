@@ -31,9 +31,10 @@ describe("rbac helpers", () => {
     expect(canRunEvals(["operations_user"])).toBe(false);
   });
 
-  it("allows support and operations knowledge ingest", () => {
-    expect(canIngest(["support_user"])).toBe(true);
+  it("limits knowledge ingest to operations and admin", () => {
+    expect(canIngest(["support_user"])).toBe(false);
     expect(canIngest(["operations_user"])).toBe(true);
+    expect(canIngest(["admin"])).toBe(true);
     expect(canIngest(["sales_user"])).toBe(false);
   });
 

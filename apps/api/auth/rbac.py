@@ -17,7 +17,7 @@ PERMISSIONS: dict[str, set[Role]] = {
     "update_issue": MUTATORS,
     "create_next_action": MUTATORS,
     "approve_next_action": {Role.ADMIN},
-    "ingest_knowledge": MUTATORS,
+    "ingest_knowledge": OPERATORS,
     "manage_tasks": ALL_STAFF,
     "view_audit": OPERATORS,
     "run_evals": {Role.ADMIN},

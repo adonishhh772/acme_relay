@@ -1,59 +1,68 @@
-.PHONY: up down demo logs eval lint test test-coverage quality reseed-db migrate-db kustomize-build security-audit test-e2e deliverables-zip tls-certs tls-up tls-down
+.PHONY: up down demo up-http demo-http logs eval lint test test-coverage quality reseed-db migrate-db kustomize-build security-audit test-e2e deliverables-zip tls-certs tls-up tls-down
 
-COMPOSE_TLS := docker compose -f docker-compose.yml -f docker-compose.tls.yml
+COMPOSE := docker compose -f docker-compose.yml -f docker-compose.tls.yml
+COMPOSE_HTTP := docker compose -f docker-compose.yml
 
-up:
-	docker compose up --build -d
+up: tls-certs
+	$(COMPOSE) up --build -d
 
 down:
-	docker compose down
+	$(COMPOSE) down
 
 demo: up
+	@echo ""
+	@echo "Relay Command Desk (HTTPS)"
+	@echo "  Desk       → https://acme-relay.local"
+	@echo "  API docs   → https://api.acme-relay.local/docs"
+	@echo "  Keycloak   → https://auth.acme-relay.local"
+	@echo "  GlitchTip  → https://glitchtip.local"
+	@echo "  Langfuse   → https://langfuse.local"
+	@echo "  Grafana    → https://grafana.local"
+	@echo "  Users      → alice/alice123 · bob/bob123 · dana/dana123 · admin/admin123"
+	@echo "  Docs       → docs/local-https.md"
+	@echo "  HTTP-only  → make demo-http  (localhost ports, no Caddy)"
+
+# Escape hatch: plain localhost HTTP (no mkcert / Caddy)
+up-http:
+	$(COMPOSE_HTTP) up --build -d
+
+demo-http: up-http
 	@echo "Relay Command Desk → http://localhost:5173"
 	@echo "API docs          → http://localhost:8000/docs"
-	@echo "MCP status        → http://localhost:8000/api/mcp/status (auth required)"
 	@echo "Keycloak          → http://localhost:8080"
 	@echo "  alice/alice123 sales · bob/bob123 support · dana/dana123 operations · admin/admin123"
-	@echo "HTTPS (optional): make tls-certs && make tls-up  → https://acme-relay.local"
 
 tls-certs:
 	chmod +x scripts/setup-local-tls.sh
 	./scripts/setup-local-tls.sh
 
-tls-up: tls-certs
-	$(COMPOSE_TLS) up --build -d
-	@echo "Command Desk → https://acme-relay.local"
-	@echo "API docs     → https://api.acme-relay.local/docs"
-	@echo "Keycloak     → https://auth.acme-relay.local"
-	@echo "GlitchTip    → https://glitchtip.local"
-	@echo "Langfuse     → https://langfuse.local"
-	@echo "Grafana      → https://grafana.local"
-	@echo "Docs         → docs/local-https.md"
+tls-up: demo
 
-tls-down:
-	$(COMPOSE_TLS) down
+tls-down: down
 
 logs:
-	docker compose logs -f api worker
+	$(COMPOSE) logs -f api worker
 
 reseed-db:
 	bash scripts/reseed-db.sh
 
 migrate-db:
-	docker compose exec -T postgres psql -U relay -d relay_ops < infra/postgres/03-schema-enrichment.sql
-	docker compose exec -T postgres psql -U relay -d relay_ops < infra/postgres/04-rbac-operations-parity.sql
-	docker compose exec -T postgres psql -U relay -d relay_ops < infra/postgres/05-account-management.sql
-	docker compose exec -T postgres psql -U relay -d relay_ops < infra/postgres/06-am-metrics-seed.sql
-	docker compose exec -T postgres psql -U relay -d relay_ops < infra/postgres/07-knowledge-business-value.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/03-schema-enrichment.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/04-rbac-operations-parity.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/05-account-management.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/06-am-metrics-seed.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/07-knowledge-business-value.sql
+	$(COMPOSE) exec -T postgres psql -U relay -d relay_ops < infra/postgres/08-ingest-ops-admin-only.sql
 
 eval:
-	docker compose exec -e API_URL=http://localhost:8000 -e KEYCLOAK_URL=http://localhost:8080 api \
+	$(COMPOSE) exec -e API_URL=http://api:8000 -e KEYCLOAK_URL=http://keycloak:8080 -e KEYCLOAK_ISSUER=https://auth.acme-relay.local api \
 		python /app/evals/run_eval.py
 
 eval-host:
-	cd evals && API_URL=http://127.0.0.1:8000 KEYCLOAK_URL=http://localhost:8080 \
+	cd evals && API_URL=https://api.acme-relay.local KEYCLOAK_URL=https://auth.acme-relay.local \
+		SSL_CERT_FILE="$$(mkcert -CAROOT)/rootCA.pem" \
 		python3 run_eval.py
-	@echo "Note: KEYCLOAK_URL must be http://localhost:8080 (not 127.0.0.1) so JWT iss matches the API."
+	@echo "Note: JWT iss must be https://auth.acme-relay.local (matches make demo TLS)."
 
 argocd-apply:
 	kubectl apply -k infra/kubernetes/base
@@ -90,4 +99,3 @@ deliverables-zip:
 	./scripts/package-deliverables-zip.sh
 	@ls -lh deliverables/relay-command-desk-source.zip
 	@echo "Deliverables pack → deliverables/README.md"
-

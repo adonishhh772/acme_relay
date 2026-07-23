@@ -70,8 +70,9 @@ The archive must include `docker-compose.yml`, `.env.example`, `Makefile`, and a
 ## Verification checklist
 
 1. `cp .env.example .env` and set `OPENAI_API_KEY` (or accept hash embeddings offline).
-2. `make demo` then `make migrate-db`.
-3. Open http://localhost:5173 — sign in (`bob` / `bob123` or `dana` / `dana123`).
+2. `brew install mkcert nss` (once), then `make demo` then `make migrate-db`.
+3. Open https://acme-relay.local — sign in (`bob` / `bob123` or `dana` / `dana123`).
+   HTTP fallback: `make demo-http` → http://localhost:5173.
 4. `make quality` — lint + API coverage ≥80%.
 5. `make eval-host` — 10-question suite (stack must be running).
 6. Optional: `GET /api/mcp/status` (auth) confirms MCP agent tool load.

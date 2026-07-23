@@ -37,7 +37,7 @@ Results:
 
 - `evals/results.json` — machine-readable (when live run completes)
 - `evals/eval_results.md` — human-readable summary
-- Admin UI: http://localhost:5173/evaluations — **Run suite** runs live chat turns and shows **Step 1…N** progress (`POST /api/evaluations/run`, poll `GET /api/evaluations/run/status`, history via `GET /api/evaluations/runs`)
+- Admin UI: https://acme-relay.local/evaluations — **Run suite** runs live chat turns and shows **Step 1…N** progress (`POST /api/evaluations/run`, poll `GET /api/evaluations/run/status`, history via `GET /api/evaluations/runs`)
 
 **Important:** Eval runner obtains JWTs from Keycloak. `KEYCLOAK_URL` / issuer must match the API, or requests fail with `401 Invalid token issuer`.
 

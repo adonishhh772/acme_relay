@@ -23,15 +23,15 @@ make deliverables-zip
 
 | Service | URL |
 |---------|-----|
-| Command Desk | http://localhost:5173 |
-| Dashboard | http://localhost:5173/dashboard |
-| API (OpenAPI) | http://localhost:8000/docs |
-| MCP status | http://localhost:8000/api/mcp/status (auth) |
-| Keycloak | http://localhost:8080 |
-| Langfuse | http://localhost:3001 |
-| GlitchTip | http://localhost:8001 |
-| Grafana | http://localhost:3002 |
-| Prometheus | http://localhost:9090 |
+| Command Desk | https://acme-relay.local |
+| Dashboard | https://acme-relay.local/dashboard |
+| API (OpenAPI) | https://api.acme-relay.local/docs |
+| MCP status | https://api.acme-relay.local/api/mcp/status (auth) |
+| Keycloak | https://auth.acme-relay.local |
+| Langfuse | https://langfuse.local |
+| GlitchTip | https://glitchtip.local |
+| Grafana | https://grafana.local |
+| Prometheus | http://localhost:9090 (still published; not behind Caddy) |
 
 ### Demo users
 

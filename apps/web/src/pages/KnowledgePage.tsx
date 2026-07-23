@@ -52,7 +52,7 @@ export function KnowledgePage() {
       <PageHeader
         icon={BookOpen}
         title="Knowledge"
-        description="Celery ingests docs into pgvector with role metadata for permission-aware RAG."
+        description="Browse the catalog and ACL roles. Re-ingest into pgvector is limited to operations and admin."
         actions={ingestAction}
       />
       {message ? <p className="mb-4 mono text-sm text-ink-secondary">{message}</p> : null}
